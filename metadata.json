@@ -1,0 +1,6 @@
+{
+  "name": "Dropping-Odds 24/7 Monitor & Telegram Alert Station",
+  "description": "Real-time dropping odds monitor tracking the TOTAL section minute-by-minute horizontal drop graph with automated Telegram notifications for drops >= 0.65, live match simulator, and one-click bot export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

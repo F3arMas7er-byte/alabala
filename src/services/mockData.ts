@@ -1,0 +1,172 @@
+import { Match, DropMinutePoint, BotAlert } from '../types';
+
+export const INITIAL_MATCHES: Match[] = [
+  {
+    id: '36156592',
+    country: 'Costa Rica',
+    league: 'Primera Division Women',
+    homeTeam: 'Moravia (W)',
+    awayTeam: 'Municipal Pococi (W)',
+    score: '0:1',
+    time: "78:59",
+    currentMinute: 79,
+    status: 'LIVE',
+    currentDrop: 0.72,
+    line: 'Over 2.5',
+    initialOdd: 2.15,
+    currentOdd: 1.42,
+    link: 'https://dropping-odds.com/event.php?id=36156592&t=total',
+    history: [
+      { minute: 15, drop: 0.12, totalLine: 'O 2.5', odd: 2.10 },
+      { minute: 30, drop: 0.22, totalLine: 'O 2.5', odd: 1.95 },
+      { minute: 45, drop: 0.38, totalLine: 'O 2.5', odd: 1.80 },
+      { minute: 60, drop: 0.54, totalLine: 'O 2.5', odd: 1.62 },
+      { minute: 70, drop: 0.62, totalLine: 'O 2.5', odd: 1.50 },
+      { minute: 75, drop: 0.66, totalLine: 'O 2.5', odd: 1.46 },
+      { minute: 79, drop: 0.72, totalLine: 'O 2.5', odd: 1.42 },
+    ]
+  },
+  {
+    id: '36135841',
+    country: 'Brazil',
+    league: 'Carioca U20',
+    homeTeam: 'Flamengo U20',
+    awayTeam: 'Vasco da Gama U20',
+    score: '2:0',
+    time: "62:10",
+    currentMinute: 62,
+    status: 'LIVE',
+    currentDrop: 0.44,
+    line: 'Over 3.5',
+    initialOdd: 1.90,
+    currentOdd: 1.65,
+    link: 'https://dropping-odds.com/event.php?id=36135841&t=total',
+    history: [
+      { minute: 10, drop: 0.08, totalLine: 'O 3.5', odd: 1.88 },
+      { minute: 25, drop: 0.18, totalLine: 'O 3.5', odd: 1.82 },
+      { minute: 40, drop: 0.31, totalLine: 'O 3.5', odd: 1.74 },
+      { minute: 55, drop: 0.39, totalLine: 'O 3.5', odd: 1.68 },
+      { minute: 62, drop: 0.44, totalLine: 'O 3.5', odd: 1.65 },
+    ]
+  },
+  {
+    id: '36108425',
+    country: 'Turkey',
+    league: '3. Lig Group 2',
+    homeTeam: 'Karsiyaka SK',
+    awayTeam: 'Erbaaspor',
+    score: '1:1',
+    time: "84:22",
+    currentMinute: 84,
+    status: 'LIVE',
+    currentDrop: 0.68,
+    line: 'Over 2.5',
+    initialOdd: 2.25,
+    currentOdd: 1.45,
+    link: 'https://dropping-odds.com/event.php?id=36108425&t=total',
+    history: [
+      { minute: 20, drop: 0.15, totalLine: 'O 2.5', odd: 2.15 },
+      { minute: 45, drop: 0.32, totalLine: 'O 2.5', odd: 1.92 },
+      { minute: 65, drop: 0.51, totalLine: 'O 2.5', odd: 1.68 },
+      { minute: 78, drop: 0.63, totalLine: 'O 2.5', odd: 1.52 },
+      { minute: 82, drop: 0.65, totalLine: 'O 2.5', odd: 1.48 },
+      { minute: 84, drop: 0.68, totalLine: 'O 2.5', odd: 1.45 },
+    ]
+  },
+  {
+    id: '36167812',
+    country: 'England',
+    league: 'Premier League Cup U21',
+    homeTeam: 'Brighton U21',
+    awayTeam: 'Aston Villa U21',
+    score: '1:2',
+    time: "53:40",
+    currentMinute: 54,
+    status: 'LIVE',
+    currentDrop: 0.31,
+    line: 'Over 4.5',
+    initialOdd: 1.85,
+    currentOdd: 1.70,
+    link: 'https://dropping-odds.com/event.php?id=36167812&t=total',
+    history: [
+      { minute: 15, drop: 0.05, totalLine: 'O 4.5', odd: 1.83 },
+      { minute: 30, drop: 0.16, totalLine: 'O 4.5', odd: 1.78 },
+      { minute: 45, drop: 0.25, totalLine: 'O 4.5', odd: 1.74 },
+      { minute: 54, drop: 0.31, totalLine: 'O 4.5', odd: 1.70 },
+    ]
+  },
+  {
+    id: '36189034',
+    country: 'Japan',
+    league: 'J2 League',
+    homeTeam: 'JEF United Chiba',
+    awayTeam: 'Vegalta Sendai',
+    score: '0:0',
+    time: "33:15",
+    currentMinute: 33,
+    status: 'LIVE',
+    currentDrop: 0.19,
+    line: 'Under 2.5',
+    initialOdd: 1.80,
+    currentOdd: 1.72,
+    link: 'https://dropping-odds.com/event.php?id=36189034&t=total',
+    history: [
+      { minute: 10, drop: 0.04, totalLine: 'U 2.5', odd: 1.78 },
+      { minute: 20, drop: 0.11, totalLine: 'U 2.5', odd: 1.75 },
+      { minute: 33, drop: 0.19, totalLine: 'U 2.5', odd: 1.72 },
+    ]
+  },
+  {
+    id: '36199411',
+    country: 'Argentina',
+    league: 'Primera B Nacional',
+    homeTeam: 'Chacarita Juniors',
+    awayTeam: 'Quilmes AC',
+    score: '0:2',
+    time: "71:04",
+    currentMinute: 71,
+    status: 'LIVE',
+    currentDrop: 0.65,
+    line: 'Over 2.5',
+    initialOdd: 2.30,
+    currentOdd: 1.52,
+    link: 'https://dropping-odds.com/event.php?id=36199411&t=total',
+    history: [
+      { minute: 15, drop: 0.10, totalLine: 'O 2.5', odd: 2.22 },
+      { minute: 35, drop: 0.28, totalLine: 'O 2.5', odd: 2.00 },
+      { minute: 50, drop: 0.45, totalLine: 'O 2.5', odd: 1.78 },
+      { minute: 65, drop: 0.59, totalLine: 'O 2.5', odd: 1.60 },
+      { minute: 71, drop: 0.65, totalLine: 'O 2.5', odd: 1.52 },
+    ]
+  }
+];
+
+export const SAMPLE_CANDIDATE_GAMES = [
+  {
+    country: 'Germany',
+    league: 'Regionalliga Nordost',
+    homeTeam: 'BFC Dynamo',
+    awayTeam: 'Chemnitzer FC',
+    score: '0:0',
+    line: 'Over 2.5',
+    initialOdd: 1.95
+  },
+  {
+    country: 'Italy',
+    league: 'Serie C - Girone B',
+    homeTeam: 'Perugia Calcio',
+    awayTeam: 'Cesena FC',
+    score: '1:0',
+    line: 'Under 2.5',
+    initialOdd: 1.82
+  },
+  {
+    country: 'Spain',
+    league: 'Primera Federacion',
+    homeTeam: 'Deportivo La Coruna',
+    awayTeam: 'Lugo',
+    score: '0:1',
+    line: 'Over 2.5',
+    initialOdd: 2.05
+  }
+];
