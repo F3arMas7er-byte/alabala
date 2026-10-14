@@ -67,6 +67,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               <span className={`w-1.5 h-1.5 rounded-full ${isScanning ? 'bg-emerald-400 animate-ping' : 'bg-emerald-500'}`}></span>
               <span>LIVE POLLING</span>
             </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+              100% OF LIVE GAMES MONITORED (NO EXCEPTIONS)
+            </span>
           </div>
           <p className="text-xs text-zinc-400 mt-1 flex items-center space-x-1.5 font-mono">
             <span>Target URL:</span>

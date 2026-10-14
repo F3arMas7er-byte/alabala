@@ -8,14 +8,23 @@ import {
   ExternalLink, 
   Trash2, 
   ShieldAlert, 
-  HelpCircle,
-  TrendingDown,
-  Sparkles,
-  Check,
-  Copy
+  HelpCircle, 
+  TrendingDown, 
+  Sparkles, 
+  Check, 
+  Copy, 
+  RefreshCw, 
+  Bot, 
+  UserCheck, 
+  MessageSquare, 
+  ArrowRight,
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { BotAlert, BotConfig } from '../types';
-import { sendTelegramMessage, formatTelegramHTML } from '../services/telegram';
+import { sendTelegramMessage, formatTelegramHTML, getTelegramBotInfo } from '../services/telegram';
+import confetti from 'canvas-confetti';
 
 interface TelegramAlertsProps {
   alerts: BotAlert[];
@@ -40,6 +49,44 @@ export const TelegramAlerts: React.FC<TelegramAlertsProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Bot Verification state
+  const [isCheckingBot, setIsCheckingBot] = useState(false);
+  const [botVerification, setBotVerification] = useState<{
+    tested: boolean;
+    valid?: boolean;
+    botName?: string;
+    username?: string;
+    error?: string;
+  }>({ tested: false });
+
+  // Guide toggle
+  const [showFullGuide, setShowFullGuide] = useState(true);
+
+  const handleVerifyBotToken = async () => {
+    if (!tokenInput.trim()) return;
+    setIsCheckingBot(true);
+    try {
+      const res = await getTelegramBotInfo(tokenInput.trim());
+      if (res.ok) {
+        setBotVerification({
+          tested: true,
+          valid: true,
+          botName: res.botName,
+          username: res.username
+        });
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+      } else {
+        setBotVerification({
+          tested: true,
+          valid: false,
+          error: res.error || 'Invalid Bot Token'
+        });
+      }
+    } finally {
+      setIsCheckingBot(false);
+    }
+  };
+
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseFloat(thresholdInput);
@@ -62,100 +109,239 @@ export const TelegramAlerts: React.FC<TelegramAlertsProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Configuration & Test Card */}
-      <div className="p-6 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-zinc-800 gap-4">
+      {/* Visual 3-Step Setup Wizard Banner */}
+      <div className="p-6 rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 shadow-2xl">
+        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Send className="w-5 h-5" />
+            <div className="p-2.5 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Bot className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-zinc-100">
-                Telegram Dispatcher &amp; Bot Settings
+              <h3 className="text-lg font-black text-zinc-100 flex items-center space-x-2">
+                <span>Connect to Telegram in 3 Steps</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300">
+                  Quick Guide
+                </span>
               </h3>
               <p className="text-xs text-zinc-400">
-                Connected to Telegram Bot API. Alerts trigger when TOTAL DROP &ge; {config.dropThreshold.toFixed(2)}.
+                Receive instant notifications when TOTAL DROP &ge; {config.dropThreshold.toFixed(2)} on your phone or desktop.
               </p>
             </div>
           </div>
 
           <button
-            onClick={onSendTestMessage}
-            disabled={isSendingTest}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-emerald-950 transition-all cursor-pointer"
+            onClick={() => setShowFullGuide(!showFullGuide)}
+            className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center space-x-1"
           >
-            <Send className="w-3.5 h-3.5" />
-            <span>{isSendingTest ? 'Sending Test...' : 'Send Test Alert to Telegram'}</span>
+            <span>{showFullGuide ? 'Hide Steps' : 'Show Steps'}</span>
+            {showFullGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Credentials Form */}
-        <form onSubmit={handleSaveSettings} className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1">
-              Telegram Bot Token
-            </label>
-            <input
-              type="password"
-              placeholder="e.g. 7123456789:ABCdefGhIJKlmNoPQRsTUVwX-Yz"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono"
-            />
-            <span className="text-[10px] text-zinc-500 mt-1 block">From @BotFather on Telegram</span>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1">
-              Telegram Chat ID
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. 123456789 or @your_channel"
-              value={chatIdInput}
-              onChange={(e) => setChatIdInput(e.target.value)}
-              className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono"
-            />
-            <span className="text-[10px] text-zinc-500 mt-1 block">From @userinfobot or channel ID</span>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1">
-              DROP Alert Threshold
-            </label>
-            <div className="flex space-x-2">
-              <input
-                type="number"
-                step="0.01"
-                min="0.10"
-                max="2.00"
-                value={thresholdInput}
-                onChange={(e) => setThresholdInput(e.target.value)}
-                className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono font-bold focus:outline-none focus:border-emerald-500/60"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold text-xs transition-colors whitespace-nowrap cursor-pointer"
-              >
-                {saveSuccess ? 'Saved!' : 'Save'}
-              </button>
+        {showFullGuide && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+            {/* Step 1 */}
+            <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-bold text-xs flex items-center justify-center">
+                  1
+                </span>
+                <a
+                  href="https://t.me/BotFather"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1 font-semibold"
+                >
+                  <span>@BotFather</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <h4 className="text-xs font-bold text-zinc-200">
+                Get Your Bot Token
+              </h4>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Open <strong className="text-blue-400">@BotFather</strong>, send <code className="text-zinc-200">/newbot</code>, give it a name and username. Copy the resulting HTTP API token.
+              </p>
             </div>
-            <span className="text-[10px] text-zinc-500 mt-1 block">Your target: 0.65 or greater</span>
+
+            {/* Step 2 */}
+            <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-mono font-bold text-xs flex items-center justify-center">
+                  2
+                </span>
+                <a
+                  href="https://t.me/userinfobot"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1 font-semibold"
+                >
+                  <span>@userinfobot</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <h4 className="text-xs font-bold text-zinc-200">
+                Find Your Chat ID
+              </h4>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Open <strong className="text-blue-400">@userinfobot</strong> and press Start. It tells you your numeric ID (e.g. <code className="text-zinc-200">123456789</code>).
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-mono font-bold text-xs flex items-center justify-center">
+                  3
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">
+                  IMPORTANT
+                </span>
+              </div>
+              <h4 className="text-xs font-bold text-zinc-200">
+                Press /start on Your Bot
+              </h4>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Open the chat with <strong className="text-zinc-200">your new bot</strong> in Telegram and press <strong className="text-emerald-400">/start</strong>. Telegram security prevents bots from messaging users who haven&apos;t started them!
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Configuration & Test Form */}
+      <div className="p-6 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+          <div>
+            <h3 className="text-base font-extrabold text-zinc-100 flex items-center space-x-2">
+              <Settings className="w-4 h-4 text-emerald-400" />
+              <span>Telegram Bot Credentials &amp; Live Verification</span>
+            </h3>
+            <p className="text-xs text-zinc-400">
+              Configure credentials here for live browser alerts or in <code className="text-zinc-300">.env</code> for the 24/7 Python bot.
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={onSendTestMessage}
+              disabled={isSendingTest}
+              className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-emerald-950 transition-all cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{isSendingTest ? 'Sending Test...' : 'Send Test Alert to Telegram'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSaveSettings} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Token */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-zinc-300">
+                  Telegram Bot Token
+                </label>
+                {tokenInput && (
+                  <button
+                    type="button"
+                    onClick={handleVerifyBotToken}
+                    disabled={isCheckingBot}
+                    className="text-[10px] text-blue-400 hover:underline flex items-center space-x-1"
+                  >
+                    {isCheckingBot ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Checking...</span>
+                      </>
+                    ) : (
+                      <span>Verify Token</span>
+                    )}
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                placeholder="e.g. 7123456789:ABCdefGhIJKlmNoPQRsTUVwX-Yz"
+                value={tokenInput}
+                onChange={(e) => {
+                  setTokenInput(e.target.value);
+                  setBotVerification({ tested: false });
+                }}
+                className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono"
+              />
+              {botVerification.tested && (
+                <div className="mt-1.5 text-[11px] font-mono">
+                  {botVerification.valid ? (
+                    <span className="text-emerald-400 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Connected: @{botVerification.username} ({botVerification.botName})</span>
+                    </span>
+                  ) : (
+                    <span className="text-rose-400 flex items-center space-x-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>{botVerification.error}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Chat ID */}
+            <div>
+              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+                Telegram Chat ID
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 123456789 or @your_channel"
+                value={chatIdInput}
+                onChange={(e) => setChatIdInput(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono"
+              />
+              <span className="text-[10px] text-zinc-500 mt-1 block">Your numeric ID from @userinfobot</span>
+            </div>
+
+            {/* Threshold */}
+            <div>
+              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+                DROP Threshold (TOTAL Section)
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.10"
+                  max="2.00"
+                  value={thresholdInput}
+                  onChange={(e) => setThresholdInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono font-bold focus:outline-none focus:border-emerald-500/60"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors whitespace-nowrap cursor-pointer shadow-sm"
+                >
+                  {saveSuccess ? 'Saved!' : 'Save Settings'}
+                </button>
+              </div>
+              <span className="text-[10px] text-zinc-500 mt-1 block">Alert fires when DROP &ge; 0.65</span>
+            </div>
           </div>
         </form>
 
-        {/* Quick Instructions Dropdown */}
-        <div className="mt-4 p-3 bg-zinc-950/60 rounded-xl border border-zinc-800/80 text-xs text-zinc-400 flex items-start space-x-2.5">
-          <HelpCircle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <span className="text-zinc-200 font-semibold">How to get your credentials:</span>
-            <p>
-              1. Search <strong className="text-emerald-400">@BotFather</strong> on Telegram &rarr; Send <code className="text-zinc-200">/newbot</code> &rarr; Copy the HTTP API token.
-            </p>
-            <p>
-              2. Search <strong className="text-emerald-400">@userinfobot</strong> on Telegram &rarr; Send any message &rarr; Copy your numeric ID (e.g., <code>123456789</code>).
-            </p>
+        {/* Group / Channel Instructions */}
+        <div className="p-4 bg-zinc-900/40 rounded-2xl border border-zinc-800 text-xs text-zinc-400 space-y-1.5">
+          <div className="flex items-center space-x-1.5 text-zinc-300 font-semibold">
+            <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+            <span>Sending alerts to a Telegram Group or Channel:</span>
           </div>
+          <p className="leading-relaxed">
+            To send alerts to a private group or public channel instead of your personal DM:
+            1. Add your bot to the group or channel as an <strong className="text-zinc-200">Administrator</strong>.
+            2. For public channels, use your channel handle (e.g. <code className="text-zinc-200">@my_odds_channel</code>) as the Chat ID.
+            3. For private groups, forward a message from the group to <strong className="text-zinc-200">@RawDataBot</strong> to find the negative group ID (e.g. <code className="text-zinc-200">-1001234567890</code>).
+          </p>
         </div>
       </div>
 

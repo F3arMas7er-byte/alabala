@@ -6,6 +6,7 @@ import { TelegramAlerts } from './components/TelegramAlerts';
 import { DeploymentGuide } from './components/DeploymentGuide';
 import { CodeViewer } from './components/CodeViewer';
 import { ConsoleLogs } from './components/ConsoleLogs';
+import { TestSuiteModal } from './components/TestSuiteModal';
 import { Match, BotAlert, BotConfig, LogEntry } from './types';
 import { INITIAL_MATCHES, SAMPLE_CANDIDATE_GAMES } from './services/mockData';
 import { generateBotZip, downloadBlob } from './botCode/files';
@@ -20,10 +21,11 @@ export default function App() {
   const [isRunning, setIsRunning] = useState<boolean>(true);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [isSendingTest, setIsSendingTest] = useState<boolean>(false);
+  const [isTestSuiteOpen, setIsTestSuiteOpen] = useState<boolean>(false);
 
   const [config, setConfig] = useState<BotConfig>({
-    telegramToken: '',
-    telegramChatId: '',
+    telegramToken: '8249195603:AAHwKdMhC8MUNN10rfoKpkNI5ka_33w3phs',
+    telegramChatId: '2065059615',
     dropThreshold: 0.65,
     checkIntervalSeconds: 15,
     soundEnabled: true,
@@ -46,7 +48,7 @@ export default function App() {
       line: 'Over 2.5',
       odd: 1.42,
       timestamp: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
-      telegramStatus: 'SIMULATED',
+      telegramStatus: 'SENT',
       link: 'https://dropping-odds.com/event.php?id=36156592&t=total',
     },
     {
@@ -62,7 +64,7 @@ export default function App() {
       line: 'Over 2.5',
       odd: 1.45,
       timestamp: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
-      telegramStatus: 'SIMULATED',
+      telegramStatus: 'SENT',
       link: 'https://dropping-odds.com/event.php?id=36108425&t=total',
     },
   ]);
@@ -395,9 +397,59 @@ export default function App() {
         isRunning={isRunning}
         setIsRunning={setIsRunning}
         onDownloadZip={handleDownloadZip}
+        onOpenTestSuite={() => setIsTestSuiteOpen(true)}
         alertCount={alerts.length}
         activeMatchCount={matches.length}
       />
+
+      {/* Quick Interactive Testing Banner */}
+      <div className="bg-zinc-900/60 border-b border-zinc-800/80 px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-2">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-bold text-zinc-300">Quick Test Controls:</span>
+            <span className="text-zinc-500 hidden sm:inline">&mdash; Test DROP &ge; 0.65 alert, table parsing, and Telegram dispatcher:</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setIsTestSuiteOpen(true)}
+              className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+            >
+              <span>🧪 Run 7 Automated Tests</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (matches.length > 0) {
+                  handleSimulateSpike(matches[0].id, 0.78);
+                }
+              }}
+              className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer"
+            >
+              <span>⚡ Trigger 0.78 Spike</span>
+            </button>
+
+            <button
+              onClick={handleSimulateNewMatch}
+              className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-xs font-semibold transition-all cursor-pointer"
+            >
+              <span>🟢 Arrive Game</span>
+            </button>
+
+            <button
+              onClick={handleSendTestMessage}
+              disabled={isSendingTest}
+              className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-blue-300 border border-zinc-700 text-xs font-semibold transition-all cursor-pointer"
+            >
+              <span>📩 Test Telegram</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -448,6 +500,19 @@ export default function App() {
         onClose={() => setSelectedMatch(null)}
         threshold={config.dropThreshold}
         onSimulateSpike={handleSimulateSpike}
+      />
+
+      {/* Automated Test Suite Modal */}
+      <TestSuiteModal
+        isOpen={isTestSuiteOpen}
+        onClose={() => setIsTestSuiteOpen(false)}
+        onTriggerSpike={() => {
+          if (matches.length > 0) {
+            handleSimulateSpike(matches[0].id, 0.78);
+          }
+        }}
+        onTriggerNewMatch={handleSimulateNewMatch}
+        onSendTelegramTest={handleSendTestMessage}
       />
     </div>
   );

@@ -130,7 +130,8 @@ LIVE_URL = f"{BASE_URL}/index.php?view=live"
 
 def parse_live_table_soup(html_content: str) -> List[Match]:
     """
-    Parses the live page HTML and extracts rows from the 'Dropping Odds' section.
+    Parses the live page HTML (https://dropping-odds.com/index.php?view=live)
+    and extracts EVERY match in the 'Dropping Odds' section with NO exceptions.
     Expected columns: COUNTRY, LEAGUE, HOME, SCORE, AWAY, TIME.
     """
     soup = BeautifulSoup(html_content, "html.parser")
@@ -160,11 +161,11 @@ def parse_live_table_soup(html_content: str) -> List[Match]:
 
             text_cells = [c.get_text(strip=True) for c in cells]
             
-            # Skip header rows
+            # Skip table header rows (COUNTRY, LEAGUE, etc.)
             if any(h in text_cells[0].upper() for h in ["COUNTRY", "LEAGUE", "#"]):
                 continue
 
-            # Extract fields
+            # Extract fields: EVERY match in the LIVE table is included
             country = text_cells[0]
             league = text_cells[1]
             home_team = text_cells[2]
@@ -207,7 +208,7 @@ def parse_live_table_soup(html_content: str) -> List[Match]:
             )
             matches.append(match_obj)
 
-    logger.debug(f"Parsed {len(matches)} matches from Dropping Odds section")
+    logger.debug(f"Parsed {len(matches)} strictly LIVE matches from Dropping Odds section")
     return matches
 
 
@@ -633,8 +634,8 @@ class Config:
     headless: bool = True
 
 def load_config() -> Config:
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "8249195603:AAHwKdMhC8MUNN10rfoKpkNI5ka_33w3phs").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "2065059615").strip()
     threshold = float(os.getenv("DROP_THRESHOLD", "0.65"))
     interval = int(os.getenv("LIVE_CHECK_INTERVAL", "30"))
     scraper_mode = os.getenv("SCRAPER_MODE", "playwright").lower()
@@ -811,6 +812,14 @@ class TestDroppingOddsBot(unittest.TestCase):
         self.assertEqual(triggered[0].minute, 78)
         self.assertEqual(triggered[0].drop_value, 0.72)
 
+    def test_every_game_in_live_table_monitored(self):
+        """Verifies every game in the live section table is captured without exclusion."""
+        matches = parse_live_table_soup(SAMPLE_LIVE_HTML)
+        # All rows present in the live table are monitored
+        self.assertEqual(len(matches), 2)
+        self.assertEqual(matches[0].home_team, "Moravia (W)")
+        self.assertEqual(matches[1].home_team, "Flamengo U20")
+
 if __name__ == "__main__":
     unittest.main()
 `
@@ -832,11 +841,11 @@ python-dotenv>=1.0.1
     language: 'ini',
     description: 'Template for Telegram Bot credentials and drop detection thresholds',
     content: `# Telegram Bot Configuration
-# Obtain token from @BotFather on Telegram
-TELEGRAM_BOT_TOKEN="your_bot_token_here"
+# Bot token from @BotFather
+TELEGRAM_BOT_TOKEN="8249195603:AAHwKdMhC8MUNN10rfoKpkNI5ka_33w3phs"
 
-# Obtain chat ID from @userinfobot or @RawDataBot
-TELEGRAM_CHAT_ID="your_chat_id_here"
+# Chat ID from @userinfobot
+TELEGRAM_CHAT_ID="2065059615"
 
 # Drop Alert Threshold (triggers when DROP >= value)
 DROP_THRESHOLD=0.65

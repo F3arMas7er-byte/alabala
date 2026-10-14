@@ -22,6 +22,7 @@ interface NavbarProps {
   isRunning: boolean;
   setIsRunning: (running: boolean) => void;
   onDownloadZip: () => void;
+  onOpenTestSuite: () => void;
   alertCount: number;
   activeMatchCount: number;
 }
@@ -34,6 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isRunning,
   setIsRunning,
   onDownloadZip,
+  onOpenTestSuite,
   alertCount,
   activeMatchCount
 }) => {
@@ -154,6 +156,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               {config.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
 
+            {/* Test Suite Trigger */}
+            <button
+              onClick={onOpenTestSuite}
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-bold border border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 transition-all cursor-pointer shadow-sm"
+              title="Open Automated Test Suite & Simulation Triggers"
+            >
+              <span>🧪</span>
+              <span className="hidden sm:inline">Test Suite</span>
+            </button>
+
             {/* Run/Pause Loop */}
             <button
               onClick={() => setIsRunning(!isRunning)}
@@ -214,10 +226,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             Python Code
           </button>
           <button
-            onClick={() => setActiveTab('logs')}
-            className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${activeTab === 'logs' ? 'bg-emerald-600 text-white font-bold' : 'text-zinc-400 bg-zinc-900'}`}
+            onClick={onOpenTestSuite}
+            className="px-3 py-1.5 rounded-lg whitespace-nowrap text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 font-bold"
           >
-            Logs
+            🧪 Test Suite
           </button>
         </div>
       </div>

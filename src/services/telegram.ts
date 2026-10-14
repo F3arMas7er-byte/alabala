@@ -51,3 +51,31 @@ export async function sendTelegramMessage(
     return { success: false, error: msg };
   }
 }
+
+export async function getTelegramBotInfo(token: string): Promise<{
+  ok: boolean;
+  botName?: string;
+  username?: string;
+  error?: string;
+}> {
+  if (!token || token.trim() === '') {
+    return { ok: false, error: 'Token is empty' };
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token.trim()}/getMe`);
+    const data = await res.json();
+    if (data.ok && data.result) {
+      return {
+        ok: true,
+        botName: data.result.first_name,
+        username: data.result.username
+      };
+    } else {
+      return { ok: false, error: data.description || 'Invalid token' };
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}
+
