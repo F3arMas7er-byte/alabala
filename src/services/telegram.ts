@@ -9,6 +9,7 @@ export function formatTelegramHTML(alert: BotAlert): string {
     `📉 <b>Section:</b> TOTAL\n` +
     `⚡ <b>DROP Value:</b> <code>${alert.dropValue.toFixed(2)}</code> (Threshold: ${alert.threshold.toFixed(2)})\n` +
     `📊 <b>Line:</b> ${alert.line} @ ${alert.odd.toFixed(2)}\n\n` +
+    `🔒 <b>Alert Rule:</b> Strictly 1 alert per game (Zero minute spam)\n` +
     `🔗 <a href="${alert.link}">Open Match Page on Dropping-Odds</a>\n` +
     `🤖 <i>Dropping-Odds 24/7 Sentinel Bot</i>`
   );

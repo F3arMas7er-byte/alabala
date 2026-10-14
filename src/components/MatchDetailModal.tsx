@@ -18,13 +18,15 @@ interface MatchDetailModalProps {
   onClose: () => void;
   threshold: number;
   onSimulateSpike?: (matchId: string, customDrop: number) => void;
+  isAlerted?: boolean;
 }
 
 export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({
   match,
   onClose,
   threshold,
-  onSimulateSpike
+  onSimulateSpike,
+  isAlerted = false
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<MatchSubPage>('TOTAL');
 
@@ -146,6 +148,7 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({
               match={match} 
               threshold={threshold}
               onSimulateSpike={onSimulateSpike}
+              isAlerted={isAlerted}
             />
           ) : (
             <div className="py-12 text-center space-y-3">

@@ -19,6 +19,7 @@ import { Match } from '../types';
 interface LiveMonitorProps {
   matches: Match[];
   threshold: number;
+  alertedMatchIds: Set<string>;
   onSelectMatch: (match: Match) => void;
   onSimulateNewMatch: () => void;
   onSimulateRemoveMatch: () => void;
@@ -29,6 +30,7 @@ interface LiveMonitorProps {
 export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   matches,
   threshold,
+  alertedMatchIds,
   onSelectMatch,
   onSimulateNewMatch,
   onSimulateRemoveMatch,
@@ -69,6 +71,9 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             </span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
               100% OF LIVE GAMES MONITORED (NO EXCEPTIONS)
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/10 text-blue-300 border border-blue-500/20">
+              STRICT 1 ALERT PER GAME
             </span>
           </div>
           <p className="text-xs text-zinc-400 mt-1 flex items-center space-x-1.5 font-mono">
@@ -171,6 +176,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
               ) : (
                 filteredMatches.map((match) => {
                   const isHigh = match.currentDrop >= threshold;
+                  const hasAlerted = alertedMatchIds.has(match.id);
                   return (
                     <tr
                       key={match.id}
@@ -223,19 +229,33 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 
                       {/* DROP (TOTAL) */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap bg-zinc-900/30">
-                        <div className="flex items-center justify-center space-x-2">
-                          <span
-                            className={`font-mono font-extrabold px-2 py-0.5 rounded text-xs ${
-                              isHigh
-                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
-                                : 'bg-zinc-800 text-zinc-300'
-                            }`}
-                          >
-                            {match.currentDrop.toFixed(2)}
-                          </span>
-                          {isHigh && (
-                            <span className="text-[10px] font-bold text-rose-400 tracking-wider font-mono">
-                              ≥ {threshold.toFixed(2)}
+                        <div className="flex flex-col items-center justify-center space-y-1">
+                          <div className="flex items-center justify-center space-x-2">
+                            <span
+                              className={`font-mono font-extrabold px-2 py-0.5 rounded text-xs ${
+                                isHigh
+                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                                  : 'bg-zinc-800 text-zinc-300'
+                              }`}
+                            >
+                              {match.currentDrop.toFixed(2)}
+                            </span>
+                            {isHigh && (
+                              <span className="text-[10px] font-bold text-rose-400 tracking-wider font-mono">
+                                ≥ {threshold.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 1-Alert-Per-Game Status Badge */}
+                          {hasAlerted ? (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center space-x-1">
+                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                              <span>ALERT SENT (1/1)</span>
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-mono text-zinc-500">
+                              MONITORING (0/1)
                             </span>
                           )}
                         </div>
@@ -247,8 +267,16 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                           {/* Spike button to test alert trigger */}
                           <button
                             onClick={() => onSimulateSpike(match.id, 0.76)}
-                            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/60 hover:text-rose-400 text-zinc-400 border border-zinc-700 hover:border-rose-500/40 transition-colors"
-                            title="Simulate sudden drop spike >= 0.65"
+                            className={`p-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                              hasAlerted
+                                ? 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-400'
+                                : 'bg-zinc-800 hover:bg-rose-950/60 hover:text-rose-400 text-zinc-400 border-zinc-700 hover:border-rose-500/40'
+                            }`}
+                            title={
+                              hasAlerted
+                                ? 'This match has already sent its 1 alert (subsequent minute drops are blocked)'
+                                : 'Simulate sudden drop spike >= 0.65'
+                            }
                           >
                             <Zap className="w-3.5 h-3.5" />
                           </button>
@@ -275,7 +303,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 flex items-start space-x-3 text-xs text-zinc-400">
         <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
         <div>
-          <strong className="text-zinc-200">How real-time tracking works:</strong> The bot polls this &quot;Dropping Odds&quot; table 24/7. When a match enters, the bot follows the redirect link to its individual game page, clicks the <strong className="text-emerald-400">&quot;TOTAL&quot;</strong> sub-page, and reads each horizontal minute column for the <strong className="text-emerald-400">&quot;DROP&quot;</strong> row. As soon as any minute shows a drop of <code className="text-rose-400 font-mono font-bold">&ge; 0.65</code>, a Telegram alert is dispatched.
+          <strong className="text-zinc-200">Strict 1 Alert Per Game Rule:</strong> The bot polls the &quot;Dropping Odds&quot; table and tracks every live match. When a game enters the <strong className="text-emerald-400">&quot;TOTAL&quot;</strong> section with a <strong className="text-rose-400 font-mono font-bold">DROP &ge; {threshold.toFixed(2)}</strong>, it fires <strong className="text-emerald-400 font-semibold">exactly 1 alert to Telegram</strong>. Once notified, that match is marked as alerted and subsequent minute drops are suppressed so your Telegram is never flooded with minute-by-minute messages.
         </div>
       </div>
     </div>

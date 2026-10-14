@@ -63,6 +63,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   TOTAL DROP ≥ {config.dropThreshold.toFixed(2)}
                 </span>
+                <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                  1 ALERT / GAME
+                </span>
               </div>
               <p className="text-xs text-zinc-400 font-medium hidden sm:block">
                 Telegram Sentinel &amp; Real-Time Scraper Dashboard

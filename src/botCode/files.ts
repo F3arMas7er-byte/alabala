@@ -173,21 +173,21 @@ def parse_live_table_soup(html_content: str) -> List[Match]:
             away_team = text_cells[4]
             time_str = text_cells[5]
 
-            # Look for anchor tag pointing to event page (e.g., event.php?id=36156592 or /event/36156592)
+            # Check game_id attribute (e.g. <tr class='a_link' game_id='13292885'>)
+            event_id = row.get("game_id", "").strip()
             link_tag = row.find("a", href=True)
-            event_id = ""
             event_url = ""
             if link_tag:
                 href = link_tag["href"]
                 match_id_match = re.search(r"id=(\\d+)", href) or re.search(r"/event/(\\d+)", href)
-                if match_id_match:
+                if match_id_match and not event_id:
                     event_id = match_id_match.group(1)
-                else:
-                    event_id = href.strip("/")
-                
+            
+            if event_id:
+                event_url = f"{BASE_URL}/event.php?id={event_id}"
+            elif link_tag:
                 event_url = href if href.startswith("http") else f"{BASE_URL}/{href.lstrip('/')}"
             else:
-                # Generate stable synthetic key
                 event_id = f"{home_team}_{away_team}".replace(" ", "_")
                 event_url = f"{BASE_URL}/event.php?id={event_id}"
 
@@ -214,19 +214,48 @@ def parse_live_table_soup(html_content: str) -> List[Match]:
 
 def parse_drop_table_from_html(html_content: str) -> List[DropDataPoint]:
     """
-    Parses the TOTAL sub-page to extract minute-by-minute values from the horizontal DROP graph/table.
-    Checks both:
-      1. HTML matrix table with 'DROP' row and minute columns (1, 2, ... N)
-      2. JavaScript Highcharts/ApexCharts series data for 'Drop'
+    Parses the TOTAL sub-page to extract minute-by-minute values from the DROP graph/table.
+    Supports:
+      1. dropping-odds.com table: Date | Time (Min) | Score | Over | Handicap | Under | Drop
+      2. Horizontal matrix: Minute row (1', 2'...) with 'DROP' row
+      3. JavaScript embedded series: { name: 'Drop', data: [[1, 0.12], ...] }
     """
     data_points = []
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Strategy 1: Look for table with row labeled "DROP" or "Drop"
+    # Strategy 1: Column-based table on dropping-odds.com event.php?t=total
+    for table in soup.find_all("table"):
+        headers = [th.get_text(strip=True).upper() for th in table.find_all("th")]
+        time_idx = -1
+        drop_idx = -1
+        for idx, h in enumerate(headers):
+            if "TIME" in h or "MINUTE" in h:
+                time_idx = idx
+            elif "DROP" in h:
+                drop_idx = idx
+
+        if time_idx != -1 and drop_idx != -1:
+            for row in table.find_all("tr"):
+                cells = row.find_all(["td", "th"])
+                if len(cells) > max(time_idx, drop_idx):
+                    t_str = cells[time_idx].get_text(strip=True)
+                    d_str = cells[drop_idx].get_text(strip=True).replace("%", "").replace(",", ".")
+                    min_match = re.search(r"(\\d+)", t_str)
+                    if min_match and d_str:
+                        try:
+                            m_val = int(min_match.group(1))
+                            d_val = float(d_str)
+                            data_points.append(DropDataPoint(minute=m_val, drop_value=d_val))
+                        except ValueError:
+                            pass
+
+    if data_points:
+        return sorted(data_points, key=lambda x: x.minute)
+
+    # Strategy 2: Horizontal matrix where row label is 'DROP'
     for row in soup.find_all("tr"):
         row_text = row.get_text(strip=True).upper()
         if "DROP" in row_text:
-            # Check previous row or header for minutes
             header_row = row.find_previous_sibling("tr")
             header_cells = header_row.find_all(["th", "td"]) if header_row else []
             data_cells = row.find_all(["td", "th"])
@@ -235,7 +264,6 @@ def parse_drop_table_from_html(html_content: str) -> List[DropDataPoint]:
                 txt = cell.get_text(strip=True).replace("%", "").replace(",", ".")
                 try:
                     val = float(txt)
-                    # Infer minute from header column or index
                     minute = idx
                     if idx < len(header_cells):
                         h_txt = header_cells[idx].get_text(strip=True)
@@ -251,17 +279,15 @@ def parse_drop_table_from_html(html_content: str) -> List[DropDataPoint]:
     if data_points:
         return sorted(data_points, key=lambda x: x.minute)
 
-    # Strategy 2: Look for embedded JavaScript series data: { name: 'Drop', data: [[1, 0.12], [2, 0.68]] }
+    # Strategy 3: Embedded JS series
     script_tags = soup.find_all("script")
     for s in script_tags:
         code = s.string or ""
         if "Drop" in code or "DROP" in code:
-            # Match pattern: name: ['"]?Drop['"]? ... data: \\[([^\\]]+)\\]
             pattern = re.compile(r"name\\s*:\\s*['\\\"]?Drop['\\\"]?.*?data\\s*:\\s*\\[(.*?)\\]", re.DOTALL | re.IGNORECASE)
             m = pattern.search(code)
             if m:
                 raw_data = m.group(1)
-                # Parse tuples like [10, 0.68], [11, 0.72] or numeric lists
                 points = re.findall(r"\\[\\s*(\\d+)\\s*,\\s*([0-9.]+)\\s*\\]", raw_data)
                 for min_str, drop_str in points:
                     try:
@@ -375,8 +401,8 @@ class OddsMonitor:
             chat_id=config.telegram_chat_id
         )
         self.active_matches: Dict[str, Match] = {}
-        # Stores (match_id, minute) tuples to prevent duplicate alerts for the same minute
-        self.alerted_keys: Set[Tuple[str, int]] = set()
+        # Stores match_ids to ensure EXACTLY 1 alert per game
+        self.alerted_match_ids: Set[str] = set()
         self.is_running = False
         self.scraper: PlaywrightScraper = None
 
@@ -449,39 +475,42 @@ class OddsMonitor:
             logger.error(f"Error during check cycle: {e}", exc_info=True)
 
     async def _check_match_drop(self, match: Match):
-        """Checks the TOTAL section of a match for drop values >= threshold."""
+        """Checks the TOTAL section of a match. Sends EXACTLY 1 alert per game when DROP >= threshold."""
+        # STRICT RULE: 1 alert per game only!
+        if match.id in self.alerted_match_ids:
+            return
+
         try:
             html = await self._fetch_match_total_html(match.url)
             drop_points = parse_drop_table_from_html(html)
 
+            # Find the highest drop value
             for dp in drop_points:
-                # Key verification: Drop value is 0.65 or greater
                 if dp.drop_value >= self.config.drop_threshold:
-                    dedup_key = (match.id, dp.minute)
-                    if dedup_key not in self.alerted_keys:
-                        self.alerted_keys.add(dedup_key)
-                        
-                        logger.warning(
-                            f"🚨 HIGH DROP DETECTED! Match: {match.home_team} vs {match.away_team} | "
-                            f"Min: {dp.minute}' | DROP: {dp.drop_value:.2f} >= {self.config.drop_threshold}"
-                        )
-                        
-                        alert = Alert(
-                            match_id=match.id,
-                            country=match.country,
-                            league=match.league,
-                            home_team=match.home_team,
-                            away_team=match.away_team,
-                            score=match.score,
-                            minute=dp.minute,
-                            time_str=match.time_str,
-                            drop_value=dp.drop_value,
-                            threshold=self.config.drop_threshold,
-                            match_url=match.url,
-                            timestamp=datetime.now(timezone.utc).isoformat()
-                        )
-                        
-                        await self.notifier.send_drop_alert(alert)
+                    self.alerted_match_ids.add(match.id)
+                    
+                    logger.warning(
+                        f"🚨 [1-ALERT-PER-GAME] Match: {match.home_team} vs {match.away_team} | "
+                        f"Min: {dp.minute}' | DROP: {dp.drop_value:.2f} >= {self.config.drop_threshold}"
+                    )
+                    
+                    alert = Alert(
+                        match_id=match.id,
+                        country=match.country,
+                        league=match.league,
+                        home_team=match.home_team,
+                        away_team=match.away_team,
+                        score=match.score,
+                        minute=dp.minute,
+                        time_str=match.time_str,
+                        drop_value=dp.drop_value,
+                        threshold=self.config.drop_threshold,
+                        match_url=match.url,
+                        timestamp=datetime.now(timezone.utc).isoformat()
+                    )
+                    
+                    await self.notifier.send_drop_alert(alert)
+                    break  # Stop checking: exactly 1 alert per game!
 
         except Exception as e:
             logger.debug(f"Could not inspect match #{match.id}: {e}")
@@ -544,6 +573,7 @@ class TelegramNotifier:
             f"📊 <b>Score:</b> {alert.score} | ⏱️ <b>Time:</b> {alert.time_str} (Min: {alert.minute}')\\n\\n"
             f"📉 <b>Section:</b> TOTAL\\n"
             f"⚡ <b>DROP Value:</b> <code>{alert.drop_value:.2f}</code> (Threshold: {alert.threshold:.2f})\\n\\n"
+            f"🔒 <b>Alert Rule:</b> Strictly 1 alert per game (Minute spam suppressed)\\n"
             f"🔗 <a href='{alert.match_url}'>Open Match Page on Dropping-Odds</a>\\n"
             f"🤖 <i>Dropping-Odds 24/7 Monitor Bot</i>"
         )
@@ -820,6 +850,21 @@ class TestDroppingOddsBot(unittest.TestCase):
         self.assertEqual(matches[0].home_team, "Moravia (W)")
         self.assertEqual(matches[1].home_team, "Flamengo U20")
 
+    def test_strict_one_alert_per_game_rule(self):
+        """Verifies strictly 1 alert is dispatched per match; subsequent minute drops are suppressed."""
+        alerted_match_ids = set()
+        alerts_sent = []
+        match_id = "36156592"
+        # Simulate drops over minutes 75' (0.66), 76' (0.69), 78' (0.72)
+        minute_drops = [(75, 0.66), (76, 0.69), (78, 0.72)]
+        for minute, drop in minute_drops:
+            if drop >= 0.65 and match_id not in alerted_match_ids:
+                alerted_match_ids.add(match_id)
+                alerts_sent.append((minute, drop))
+        # STRICT RULE: exactly 1 alert sent for this game!
+        self.assertEqual(len(alerts_sent), 1)
+        self.assertEqual(alerts_sent[0], (75, 0.66))
+
 if __name__ == "__main__":
     unittest.main()
 `
@@ -988,7 +1033,7 @@ A production-grade 24/7 monitoring service for **https://dropping-odds.com/index
 2. **Real-time Lifecycle**: Automatically tracks new incoming games and cleans up concluded games.
 3. **TOTAL Section Drop Matrix**: Follows the redirect to each individual game page, navigates to the **TOTAL** sub-page (among \`1X2\`, \`TOTAL\`, \`HANDICAP\`, \`HT TOTAL\`, \`HT 1X2\`), and extracts the minute-by-minute horizontal **"DROP"** graph.
 4. **0.65+ Threshold Alerts**: Fires immediate Telegram notifications when \`DROP >= 0.65\`.
-5. **Deduplication**: Never spams; stores \`(match_id, minute)\` pairs to alert once per minute milestone.
+5. **Strict 1 Alert Per Game Rule**: Never spams; stores \`match_id\` to dispatch strictly 1 alert per game when DROP >= 0.65. All subsequent minute-by-minute drops for that match are completely suppressed.
 
 ## Quick Start
 \`\`\`bash

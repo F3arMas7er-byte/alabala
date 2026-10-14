@@ -16,12 +16,14 @@ interface TotalSectionDropGraphProps {
   match: Match;
   threshold: number;
   onSimulateSpike?: (matchId: string, customDrop: number) => void;
+  isAlerted?: boolean;
 }
 
 export const TotalSectionDropGraph: React.FC<TotalSectionDropGraphProps> = ({
   match,
   threshold,
-  onSimulateSpike
+  onSimulateSpike,
+  isAlerted = false
 }) => {
   const [viewMode, setViewMode] = useState<'matrix' | 'chart'>('matrix');
   const [hoveredMinute, setHoveredMinute] = useState<DropMinutePoint | null>(null);
@@ -58,6 +60,16 @@ export const TotalSectionDropGraph: React.FC<TotalSectionDropGraphProps> = ({
               <span className="text-xs font-mono text-zinc-400">
                 Line: <strong className="text-zinc-100">{match.line}</strong>
               </span>
+              {isAlerted ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <span>ALERT SENT (1/1 STRICT LIMIT)</span>
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono text-zinc-400 bg-zinc-800">
+                  MONITORING (0/1 ALERTED)
+                </span>
+              )}
             </div>
             <div className="mt-1 flex items-center space-x-3 text-sm">
               <span>
@@ -79,11 +91,19 @@ export const TotalSectionDropGraph: React.FC<TotalSectionDropGraphProps> = ({
           {onSimulateSpike && (
             <button
               onClick={() => onSimulateSpike(match.id, 0.78)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-xs font-semibold transition-all cursor-pointer"
-              title="Inject DROP = 0.78 to trigger instant alert"
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                isAlerted
+                  ? 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700'
+                  : 'bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300'
+              }`}
+              title={
+                isAlerted
+                  ? '1 Alert per game limit reached for this match. Subsequent minute drops are ignored.'
+                  : 'Inject DROP = 0.78 to trigger instant alert'
+              }
             >
               <Zap className="w-3.5 h-3.5 text-rose-400" />
-              <span>Simulate Drop Spike (0.78)</span>
+              <span>{isAlerted ? 'Spike Tested (Alerted 1/1)' : 'Simulate Drop Spike (0.78)'}</span>
             </button>
           )}
 
@@ -290,9 +310,9 @@ export const TotalSectionDropGraph: React.FC<TotalSectionDropGraphProps> = ({
         </div>
 
         <div className="p-3.5 rounded-xl bg-zinc-900/40 border border-zinc-800 text-xs">
-          <span className="text-zinc-400 font-semibold block mb-1">Detection Logic:</span>
+          <span className="text-zinc-400 font-semibold block mb-1">Detection Logic (Strict 1 Alert/Game):</span>
           <p className="text-zinc-300">
-            When <code className="text-rose-400 font-mono font-bold">DROP &ge; {threshold.toFixed(2)}</code>, the bot triggers Telegram HTML notification and caches the minute.
+            When <code className="text-rose-400 font-mono font-bold">DROP &ge; {threshold.toFixed(2)}</code>, the bot triggers exactly 1 Telegram notification. All subsequent minute drops for this game are suppressed.
           </p>
         </div>
       </div>

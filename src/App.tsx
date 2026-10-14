@@ -102,9 +102,9 @@ export default function App() {
     },
   ]);
 
-  // Keep alerted keys set in ref to prevent duplicate alerts for the same (matchId, minute)
+  // Stores alerted match IDs to ensure strictly 1 alert per game
   const alertedKeysRef = useRef<Set<string>>(
-    new Set(['36156592-79', '36108425-84', '36199411-71'])
+    new Set(['36156592', '36108425', '36199411'])
   );
 
   const addLog = (level: LogEntry['level'], message: string, matchId?: string) => {
@@ -152,12 +152,12 @@ export default function App() {
             },
           ];
 
-          // Check if this new minute drop triggers threshold
-          const dedupKey = `${match.id}-${nextMinute}`;
+          // Check if this new minute drop triggers threshold (Strictly 1 alert per game)
+          const dedupKey = match.id;
           if (newDrop >= config.dropThreshold && !alertedKeysRef.current.has(dedupKey)) {
             alertedKeysRef.current.add(dedupKey);
 
-            // Trigger Alert
+            // Trigger Alert (EXACTLY 1 PER GAME)
             const newAlert: BotAlert = {
               id: `alert-${Date.now()}-${match.id}`,
               matchId: match.id,
@@ -294,56 +294,76 @@ export default function App() {
           },
         ];
 
-        const dedupKey = `${m.id}-${nextMin}`;
-        if (!alertedKeysRef.current.has(dedupKey)) {
-          alertedKeysRef.current.add(dedupKey);
-
-          const alertObj: BotAlert = {
-            id: `alert-spike-${Date.now()}`,
-            matchId: m.id,
-            matchName: `${m.homeTeam} vs ${m.awayTeam}`,
-            league: m.league,
-            country: m.country,
-            score: m.score,
-            minute: nextMin,
-            dropValue: customDrop,
-            threshold: config.dropThreshold,
-            line: m.line,
-            odd: Math.max(1.1, m.currentOdd - 0.25),
-            timestamp: new Date().toISOString(),
-            telegramStatus: config.telegramToken ? 'PENDING' : 'SIMULATED',
-            link: `https://dropping-odds.com/event.php?id=${m.id}&t=total`,
-          };
-
-          setAlerts((prevA) => [alertObj, ...prevA]);
+        // STRICT 1 ALERT PER GAME RULE:
+        const dedupKey = m.id;
+        if (alertedKeysRef.current.has(dedupKey)) {
           addLog(
-            'ALERT',
-            `🚨 [SPIKE TEST] ${m.homeTeam} vs ${m.awayTeam} (Min: ${nextMin}') DROP: ${customDrop.toFixed(2)} >= ${config.dropThreshold.toFixed(2)}`,
+            'INFO',
+            `ℹ️ [1-ALERT-PER-GAME ENFORCED] Match "${m.homeTeam} vs ${m.awayTeam}" already sent its 1 alert. Minute ${nextMin}' drop (${customDrop.toFixed(2)}) suppressed.`,
             m.id
           );
+          return {
+            ...m,
+            currentMinute: nextMin,
+            time: `${nextMin}:00`,
+            currentDrop: customDrop,
+            currentOdd: Math.max(1.1, m.currentOdd - 0.25),
+            history: newHistory,
+          };
+        }
 
-          if (config.soundEnabled) {
-            playAlertSound(0.4);
-          }
+        alertedKeysRef.current.add(dedupKey);
 
-          if (config.telegramToken && config.telegramChatId) {
-            const html = formatTelegramHTML(alertObj);
-            sendTelegramMessage(config.telegramToken, config.telegramChatId, html).then(
-              (res) => {
-                setAlerts((latest) =>
-                  latest.map((a) =>
-                    a.id === alertObj.id
-                      ? {
-                          ...a,
-                          telegramStatus: res.success ? 'SENT' : 'FAILED',
-                          telegramError: res.error,
-                        }
-                      : a
-                  )
-                );
+        const alertObj: BotAlert = {
+          id: `alert-spike-${Date.now()}`,
+          matchId: m.id,
+          matchName: `${m.homeTeam} vs ${m.awayTeam}`,
+          league: m.league,
+          country: m.country,
+          score: m.score,
+          minute: nextMin,
+          dropValue: customDrop,
+          threshold: config.dropThreshold,
+          line: m.line,
+          odd: Math.max(1.1, m.currentOdd - 0.25),
+          timestamp: new Date().toISOString(),
+          telegramStatus: config.telegramToken ? 'PENDING' : 'SIMULATED',
+          link: `https://dropping-odds.com/event.php?id=${m.id}&t=total`,
+        };
+
+        setAlerts((prevA) => [alertObj, ...prevA]);
+        addLog(
+          'ALERT',
+          `🚨 [STRICT 1-ALERT DISPATCHED] ${m.homeTeam} vs ${m.awayTeam} (Min: ${nextMin}') DROP: ${customDrop.toFixed(2)} >= ${config.dropThreshold.toFixed(2)} [Game marked as alerted]`,
+          m.id
+        );
+
+        if (config.soundEnabled) {
+          playAlertSound(0.4);
+        }
+
+        if (config.telegramToken && config.telegramChatId) {
+          const html = formatTelegramHTML(alertObj);
+          sendTelegramMessage(config.telegramToken, config.telegramChatId, html).then(
+            (res) => {
+              setAlerts((latest) =>
+                latest.map((a) =>
+                  a.id === alertObj.id
+                    ? {
+                        ...a,
+                        telegramStatus: res.success ? 'SENT' : 'FAILED',
+                        telegramError: res.error,
+                      }
+                    : a
+                )
+              );
+              if (res.success) {
+                addLog('SUCCESS', `Telegram notification delivered to chat ${config.telegramChatId}`);
+              } else {
+                addLog('ERROR', `Telegram delivery failed: ${res.error}`);
               }
-            );
-          }
+            }
+          );
         }
 
         return {
@@ -356,6 +376,12 @@ export default function App() {
         };
       })
     );
+  };
+
+  const handleClearAlerts = () => {
+    setAlerts([]);
+    alertedKeysRef.current.clear();
+    addLog('INFO', 'Cleared alerts history and reset 1-alert-per-game tracking cache.');
   };
 
   // Test telegram sender button
@@ -457,6 +483,7 @@ export default function App() {
           <LiveMonitor
             matches={matches}
             threshold={config.dropThreshold}
+            alertedMatchIds={alertedKeysRef.current}
             onSelectMatch={(m) => setSelectedMatch(m)}
             onSimulateNewMatch={handleSimulateNewMatch}
             onSimulateRemoveMatch={handleSimulateRemoveMatch}
@@ -470,7 +497,7 @@ export default function App() {
             alerts={alerts}
             config={config}
             setConfig={setConfig}
-            onClearAlerts={() => setAlerts([])}
+            onClearAlerts={handleClearAlerts}
             onSendTestMessage={handleSendTestMessage}
             isSendingTest={isSendingTest}
           />
@@ -500,6 +527,7 @@ export default function App() {
         onClose={() => setSelectedMatch(null)}
         threshold={config.dropThreshold}
         onSimulateSpike={handleSimulateSpike}
+        isAlerted={selectedMatch ? alertedKeysRef.current.has(selectedMatch.id) : false}
       />
 
       {/* Automated Test Suite Modal */}

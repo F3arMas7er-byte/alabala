@@ -347,18 +347,21 @@ export const TelegramAlerts: React.FC<TelegramAlertsProps> = ({
 
       {/* Live Alerts Feed */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
             <ShieldAlert className="w-5 h-5 text-rose-400" />
             <h3 className="text-base font-extrabold text-zinc-100">
               Triggered Drop Alerts Feed ({alerts.length})
             </h3>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/10 text-blue-300 border border-blue-500/20">
+              1 ALERT / GAME (NO MINUTE SPAM)
+            </span>
           </div>
 
           {alerts.length > 0 && (
             <button
               onClick={onClearAlerts}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 text-xs transition-colors"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 text-xs transition-colors self-start sm:self-auto"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Clear History</span>
@@ -371,7 +374,7 @@ export const TelegramAlerts: React.FC<TelegramAlertsProps> = ({
             <ShieldAlert className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
             <h4 className="text-sm font-bold text-zinc-300">No Alerts Triggered Yet</h4>
             <p className="text-xs text-zinc-500 mt-1 max-w-md mx-auto">
-              When any live game&apos;s horizontal DROP matrix column under the &quot;TOTAL&quot; section hits 0.65 or higher, an instant notification is logged and dispatched to your Telegram here.
+              When any live game&apos;s horizontal DROP matrix column under the &quot;TOTAL&quot; section hits 0.65 or higher, an instant notification is logged and dispatched to your Telegram here (strictly 1 alert per game).
             </p>
           </div>
         ) : (
@@ -384,9 +387,12 @@ export const TelegramAlerts: React.FC<TelegramAlertsProps> = ({
                 {/* Alert Top Info */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
                         DROP: {alert.dropValue.toFixed(2)} ≥ {alert.threshold.toFixed(2)}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                        1/1 SENT (SUBSEQUENT MINUTES BLOCKED)
                       </span>
                       <span className="text-[11px] font-mono text-zinc-500 flex items-center space-x-1">
                         <Clock className="w-3 h-3" />
