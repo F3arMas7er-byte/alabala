@@ -109,6 +109,7 @@ async function sendTelegramAlert(match: LiveMatch, minPlayed: string, dropVal: n
 }
 
 async function checkMatchTotal(match: LiveMatch) {
+  // STRICT RULE: Exactly 1 alert per match (12-hour memory)
   if (alertedMatchMap.has(match.id)) {
     return;
   }
@@ -123,71 +124,40 @@ async function checkMatchTotal(match: LiveMatch) {
 
     const rowRegex = /<tr>[\s\S]*?<td class='hide'>[\s\S]*?<\/td>[\s\S]*?<td>(.*?)<\/td>[\s\S]*?<td>(.*?)<\/td>[\s\S]*?<td>(.*?)<\/td>[\s\S]*?<td>(.*?)<\/td>[\s\S]*?<td>(.*?)<\/td>[\s\S]*?<td class='(?:red\d|green\d)?'>(.*?)<\/td>/g;
 
-    const matchMinNum = parseInt(match.time.replace(/[^0-9]/g, ''), 10) || 0;
+    let rMatch: RegExpExecArray | null;
+    let qualifyingDrop: { min: string | number; drop: number; line: string; score: string } | null = null;
 
-    // Parse all rows into chronological list
-    const entries: { min: number; drop: number; line: string; score: string }[] = [];
+    // Scan all table entries in TOTAL section for drops >= DROP_THRESHOLD
     while ((rMatch = rowRegex.exec(totalHtml)) !== null) {
       const [__, mTime, mScore, over, hcap, under, dropStr] = rMatch;
       const dropVal = parseFloat(dropStr.trim().replace(',', '.'));
       const minVal = parseInt(mTime.trim(), 10);
-      if (!isNaN(dropVal) && !isNaN(minVal)) {
-        entries.push({
-          min: minVal,
-          drop: dropVal,
-          line: `Over ${hcap.trim()} (O: ${over.trim()}, U: ${under.trim()})`,
-          score: mScore.trim(),
-        });
-      }
-    }
 
-    if (entries.length === 0) return;
-
-    // Look at recent live entries (last 6 entries) to detect active live drops
-    // and filter out stale historical drops from 10+ minutes ago (e.g. 37 min lag)
-    const recentEntries = entries.slice(-6);
-    let activeDrop = -999;
-    let activeMin = '';
-    let activeLine = '';
-
-    for (let i = recentEntries.length - 1; i >= 0; i--) {
-      const entry = recentEntries[i];
-      if (entry.drop >= DROP_THRESHOLD) {
-        if (matchMinNum > 15 && (matchMinNum - entry.min > 8)) {
-          continue;
-        }
-        activeDrop = entry.drop;
-        activeMin = String(entry.min);
-        activeLine = entry.line;
-        break;
-      }
-    }
-
-    // Fallback: If match just kicked off (<= 15 min), check all entries
-    if (activeDrop < DROP_THRESHOLD && matchMinNum <= 15) {
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
-        if (entry.drop >= DROP_THRESHOLD) {
-          activeDrop = entry.drop;
-          activeMin = String(entry.min);
-          activeLine = entry.line;
-          break;
+      if (!isNaN(dropVal) && dropVal >= DROP_THRESHOLD) {
+        // Keep the highest drop detected for this game
+        if (!qualifyingDrop || dropVal > qualifyingDrop.drop) {
+          qualifyingDrop = {
+            min: !isNaN(minVal) ? minVal : (mTime.trim() || match.time),
+            drop: dropVal,
+            line: `Over ${hcap.trim()} (O: ${over.trim()}, U: ${under.trim()})`,
+            score: mScore.trim() || match.score,
+          };
         }
       }
     }
 
-    if (activeDrop > -999) {
-      match.currentDrop = activeDrop;
-      match.highestLine = activeLine;
+    if (qualifyingDrop) {
+      match.currentDrop = qualifyingDrop.drop;
+      match.highestLine = qualifyingDrop.line;
     }
 
-    if (activeDrop >= DROP_THRESHOLD && !alertedMatchMap.has(match.id)) {
+    if (qualifyingDrop && !alertedMatchMap.has(match.id)) {
       alertedMatchMap.set(match.id, Date.now());
-      log(`🚨 [STRICT 1-ALERT] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${activeMin}' | DROP: ${activeDrop} >= ${DROP_THRESHOLD}`);
-      await sendTelegramAlert(match, activeMin, activeDrop, activeLine);
+      log(`🚨 [STRICT 1-ALERT] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${DROP_THRESHOLD}`);
+      await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line);
     }
-  } catch (err) {
-    // Network jitter or timeout
+  } catch (err: any) {
+    log(`⚠️ Match #${match.id} (${match.home} vs ${match.away}) error: ${err.message}`);
   }
 }
 

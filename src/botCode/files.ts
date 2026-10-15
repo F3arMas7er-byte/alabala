@@ -484,46 +484,34 @@ class OddsMonitor:
             html = await self._fetch_match_total_html(match.url)
             drop_points = parse_drop_table_from_html(html)
 
-            # Check recent drop points (last 6 entries) to prioritize active live drops
-            # and ignore stale historical drops from 10+ minutes ago (eliminates 37-minute delay)
-            recent_points = drop_points[-6:] if len(drop_points) >= 6 else drop_points
-            active_dp = None
+            # Scan all table entries for drops >= threshold
+            qualifying = [dp for dp in drop_points if dp.drop_value >= self.config.drop_threshold]
+            if not qualifying:
+                return
 
-            for dp in reversed(recent_points):
-                if dp.drop_value >= self.config.drop_threshold:
-                    if match.minute > 15 and (match.minute - dp.minute > 8):
-                        continue  # Skip stale historical drop
-                    active_dp = dp
-                    break
+            # Keep the highest drop detected
+            best_dp = max(qualifying, key=lambda x: x.drop_value)
 
-            # Fallback for early-game matches (<= 15 minutes)
-            if not active_dp and match.minute <= 15:
-                for dp in reversed(drop_points):
-                    if dp.drop_value >= self.config.drop_threshold:
-                        active_dp = dp
-                        break
-
-            if active_dp:
-                self.alerted_match_ids.add(match.id)
-                logger.warning(
-                    f"🚨 [1-ALERT-PER-GAME] Match: {match.home_team} vs {match.away_team} | "
-                    f"Live: {match.time_str} | Drop Min: {active_dp.minute}' | DROP: {active_dp.drop_value:.2f} >= {self.config.drop_threshold}"
-                )
-                alert = Alert(
-                    match_id=match.id,
-                    country=match.country,
-                    league=match.league,
-                    home_team=match.home_team,
-                    away_team=match.away_team,
-                    score=match.score,
-                    minute=active_dp.minute,
-                    time_str=match.time_str,
-                    drop_value=active_dp.drop_value,
-                    threshold=self.config.drop_threshold,
-                    match_url=match.url,
-                    timestamp=datetime.now(timezone.utc).isoformat()
-                )
-                await self.notifier.send_drop_alert(alert)
+            self.alerted_match_ids.add(match.id)
+            logger.warning(
+                f"🚨 [1-ALERT-PER-GAME] Match: {match.home_team} vs {match.away_team} | "
+                f"Live: {match.time_str} | Drop Min: {best_dp.minute}' | DROP: {best_dp.drop_value:.2f} >= {self.config.drop_threshold}"
+            )
+            alert = Alert(
+                match_id=match.id,
+                country=match.country,
+                league=match.league,
+                home_team=match.home_team,
+                away_team=match.away_team,
+                score=match.score,
+                minute=best_dp.minute,
+                time_str=match.time_str,
+                drop_value=best_dp.drop_value,
+                threshold=self.config.drop_threshold,
+                match_url=match.url,
+                timestamp=datetime.now(timezone.utc).isoformat()
+            )
+            await self.notifier.send_drop_alert(alert)
 
         except Exception as e:
             logger.debug(f"Could not inspect match #{match.id}: {e}")

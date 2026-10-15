@@ -204,7 +204,7 @@ sudo systemctl status dropping-odds-bot`;
           </pre>
         </div>
 
-        {/* Method 4: Railway.app Zero-Lag Optimization */}
+        {/* Method 4: Railway.com 24/7 Setup */}
         <div className="p-6 rounded-2xl bg-zinc-950 border border-emerald-500/30 space-y-4 shadow-xl">
           <div className="flex items-center space-x-2.5">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -212,32 +212,34 @@ sudo systemctl status dropping-odds-bot`;
             </div>
             <div>
               <h3 className="text-base font-extrabold text-zinc-100">
-                Railway.com: Zero-Lag &amp; Instant Alert Settings
+                Railway.com: 24/7 Reliable Setup Guide
               </h3>
-              <span className="text-[11px] text-emerald-400 font-mono">Recommended settings for instant delivery</span>
+              <span className="text-[11px] text-emerald-400 font-mono">Bulletproof configuration for Railway</span>
             </div>
           </div>
-          <div className="space-y-2 text-xs text-zinc-300">
+          <div className="space-y-2.5 text-xs text-zinc-300">
             <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
-              <strong className="text-zinc-100 block">1. Turn OFF &quot;Sleep Application&quot; in Railway</strong>
+              <strong className="text-emerald-400 block">1. Recommended Start Command (Ultra-Lightweight Worker)</strong>
               <p className="text-zinc-400">
-                Go to <span className="text-zinc-200 font-mono">Service &rarr; Settings &rarr; General</span>. Disable <strong>&quot;Sleep Application&quot;</strong> or <strong>&quot;Scale to Zero&quot;</strong> so Railway does not pause the worker when idle.
+                In Railway under <span className="text-zinc-200 font-mono">Service &rarr; Settings &rarr; Deploy &rarr; Custom Start Command</span>, enter:
               </p>
-            </div>
-            <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
-              <strong className="text-zinc-100 block">2. In Railway &rarr; Variables, set:</strong>
-              <code className="block font-mono text-emerald-300 bg-black/40 p-2 rounded">
-                SCRAPER_MODE = httpx<br />
-                LIVE_CHECK_INTERVAL = 20
+              <code className="block font-mono text-emerald-300 bg-black/50 p-2 rounded border border-zinc-800">
+                node live-bot-daemon.cjs
               </code>
-              <p className="text-zinc-400">
-                <code className="text-zinc-300">httpx</code> runs 100x faster than Playwright (0.2s vs 25s per page) and uses only 30MB RAM.
+              <p className="text-zinc-400 text-[11px]">
+                This runs the pure Node.js live daemon with 0 external dependencies, consumes under 20MB of RAM, and never crashes.
               </p>
             </div>
             <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
-              <strong className="text-zinc-100 block">3. 37-Minute Lag Fix (Active Drop Detection)</strong>
+              <strong className="text-zinc-100 block">2. Turn OFF &quot;Sleep Application&quot;</strong>
               <p className="text-zinc-400">
-                The updated code filters out stale historical drops from 30+ minutes ago. It strictly alerts on the <strong>active live minute</strong> of the match so alerts arrive within seconds of the drop occurring.
+                In Railway under <span className="text-zinc-200 font-mono">Settings &rarr; General</span>, disable <strong>&quot;Sleep Application&quot;</strong> so Railway does not put your bot to sleep when there are no incoming HTTP visits.
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
+              <strong className="text-zinc-100 block">3. Full Dashboard (Web Service)</strong>
+              <p className="text-zinc-400">
+                If you prefer the web interface alongside the bot, set Start Command to <code className="text-zinc-200">npm start</code> (runs <code className="text-zinc-200">tsx server.ts</code>). The server binds automatically to Railway&apos;s dynamic <code className="text-zinc-200">PORT</code>.
               </p>
             </div>
           </div>
