@@ -33,6 +33,46 @@ export default function App() {
     filterHighDropsOnly: false,
   });
 
+  const [backendStatus, setBackendStatus] = useState<{
+    online: boolean;
+    scanCount: number;
+    liveGamesCount: number;
+    lastScanTimestamp: string | null;
+  } | null>(null);
+
+  // Sync real-time backend scraper status and live alerts
+  useEffect(() => {
+    let active = true;
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (active) {
+            setBackendStatus({
+              online: data.online,
+              scanCount: data.scanCount,
+              liveGamesCount: data.liveGamesCount,
+              lastScanTimestamp: data.lastScanTimestamp,
+            });
+            if (Array.isArray(data.alertedMatchIds)) {
+              data.alertedMatchIds.forEach((id: string) => alertedKeysRef.current.add(id));
+            }
+          }
+        }
+      } catch (err) {
+        // Dev server / network jitter
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Seed initial alerts matching the 0.65+ matches in INITIAL_MATCHES
   const [alerts, setAlerts] = useState<BotAlert[]>([
     {
@@ -426,6 +466,7 @@ export default function App() {
         onOpenTestSuite={() => setIsTestSuiteOpen(true)}
         alertCount={alerts.length}
         activeMatchCount={matches.length}
+        backendStatus={backendStatus}
       />
 
       {/* Quick Interactive Testing Banner */}

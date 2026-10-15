@@ -484,33 +484,46 @@ class OddsMonitor:
             html = await self._fetch_match_total_html(match.url)
             drop_points = parse_drop_table_from_html(html)
 
-            # Find the highest drop value
-            for dp in drop_points:
+            # Check recent drop points (last 6 entries) to prioritize active live drops
+            # and ignore stale historical drops from 10+ minutes ago (eliminates 37-minute delay)
+            recent_points = drop_points[-6:] if len(drop_points) >= 6 else drop_points
+            active_dp = None
+
+            for dp in reversed(recent_points):
                 if dp.drop_value >= self.config.drop_threshold:
-                    self.alerted_match_ids.add(match.id)
-                    
-                    logger.warning(
-                        f"🚨 [1-ALERT-PER-GAME] Match: {match.home_team} vs {match.away_team} | "
-                        f"Min: {dp.minute}' | DROP: {dp.drop_value:.2f} >= {self.config.drop_threshold}"
-                    )
-                    
-                    alert = Alert(
-                        match_id=match.id,
-                        country=match.country,
-                        league=match.league,
-                        home_team=match.home_team,
-                        away_team=match.away_team,
-                        score=match.score,
-                        minute=dp.minute,
-                        time_str=match.time_str,
-                        drop_value=dp.drop_value,
-                        threshold=self.config.drop_threshold,
-                        match_url=match.url,
-                        timestamp=datetime.now(timezone.utc).isoformat()
-                    )
-                    
-                    await self.notifier.send_drop_alert(alert)
-                    break  # Stop checking: exactly 1 alert per game!
+                    if match.minute > 15 and (match.minute - dp.minute > 8):
+                        continue  # Skip stale historical drop
+                    active_dp = dp
+                    break
+
+            # Fallback for early-game matches (<= 15 minutes)
+            if not active_dp and match.minute <= 15:
+                for dp in reversed(drop_points):
+                    if dp.drop_value >= self.config.drop_threshold:
+                        active_dp = dp
+                        break
+
+            if active_dp:
+                self.alerted_match_ids.add(match.id)
+                logger.warning(
+                    f"🚨 [1-ALERT-PER-GAME] Match: {match.home_team} vs {match.away_team} | "
+                    f"Live: {match.time_str} | Drop Min: {active_dp.minute}' | DROP: {active_dp.drop_value:.2f} >= {self.config.drop_threshold}"
+                )
+                alert = Alert(
+                    match_id=match.id,
+                    country=match.country,
+                    league=match.league,
+                    home_team=match.home_team,
+                    away_team=match.away_team,
+                    score=match.score,
+                    minute=active_dp.minute,
+                    time_str=match.time_str,
+                    drop_value=active_dp.drop_value,
+                    threshold=self.config.drop_threshold,
+                    match_url=match.url,
+                    timestamp=datetime.now(timezone.utc).isoformat()
+                )
+                await self.notifier.send_drop_alert(alert)
 
         except Exception as e:
             logger.debug(f"Could not inspect match #{match.id}: {e}")
@@ -659,16 +672,16 @@ class Config:
     telegram_bot_token: str
     telegram_chat_id: str
     drop_threshold: float = 0.65
-    live_check_interval: int = 30  # seconds between live list scans
-    scraper_mode: str = "playwright"  # 'playwright' or 'httpx'
+    live_check_interval: int = 20  # seconds between live list scans (fast & responsive)
+    scraper_mode: str = "httpx"  # 'httpx' (fast 0.2s pure HTTP) or 'playwright'
     headless: bool = True
 
 def load_config() -> Config:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "8249195603:AAHwKdMhC8MUNN10rfoKpkNI5ka_33w3phs").strip()
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "2065059615").strip()
     threshold = float(os.getenv("DROP_THRESHOLD", "0.65"))
-    interval = int(os.getenv("LIVE_CHECK_INTERVAL", "30"))
-    scraper_mode = os.getenv("SCRAPER_MODE", "playwright").lower()
+    interval = int(os.getenv("LIVE_CHECK_INTERVAL", "20"))
+    scraper_mode = os.getenv("SCRAPER_MODE", "httpx").lower()
     headless = os.getenv("HEADLESS", "true").lower() in ("true", "1", "yes")
 
     return Config(

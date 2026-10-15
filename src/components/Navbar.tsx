@@ -25,6 +25,12 @@ interface NavbarProps {
   onOpenTestSuite: () => void;
   alertCount: number;
   activeMatchCount: number;
+  backendStatus?: {
+    online: boolean;
+    scanCount: number;
+    liveGamesCount: number;
+    lastScanTimestamp: string | null;
+  } | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -37,7 +43,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onDownloadZip,
   onOpenTestSuite,
   alertCount,
-  activeMatchCount
+  activeMatchCount,
+  backendStatus
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 text-zinc-100">
@@ -66,6 +73,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
                   1 ALERT / GAME
                 </span>
+                {backendStatus?.online && (
+                  <span className="hidden xl:inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-mono text-emerald-300 font-bold">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                    </span>
+                    <span>LIVE ENGINE ONLINE (Scan #{backendStatus.scanCount})</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-zinc-400 font-medium hidden sm:block">
                 Telegram Sentinel &amp; Real-Time Scraper Dashboard
