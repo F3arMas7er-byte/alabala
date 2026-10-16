@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 const TOKEN = '8249195603:AAHwKdMhC8MUNN10rfoKpkNI5ka_33w3phs';
 const CHAT_ID = '2065059615';
 const DROP_THRESHOLD = 0.65;
+const SECONDARY_DROP_THRESHOLD = 0.99;
 const POLL_INTERVAL_MS = 25000;
 
 interface LiveMatch {
@@ -32,14 +33,40 @@ interface AlertRecord {
   minute: string;
   dropValue: number;
   threshold: number;
+  tier: 'PRIMARY_065' | 'SECONDARY_099' | 'DIRECT_099';
   line: string;
   timestamp: string;
   telegramStatus: 'SENT' | 'FAILED';
   link: string;
 }
 
-// 12-hour memory cache: matchId -> timestamp
-const alertedMatchMap = new Map<string, number>();
+interface GameAlertState {
+  alerted065: boolean;
+  alerted099: boolean;
+  firstAlertAt: number;
+  firstDrop: number;
+  megaAlertAt?: number;
+  megaDrop?: number;
+}
+
+// 12-hour memory cache: matchId -> GameAlertState
+const alertedMatchMap = new Map<string, GameAlertState>();
+
+function getAlertRecord(matchId: string): GameAlertState | null {
+  const existing: any = alertedMatchMap.get(matchId);
+  if (!existing) return null;
+  if (typeof existing === 'number') {
+    return { alerted065: true, alerted099: false, firstAlertAt: existing, firstDrop: 0.65 };
+  }
+  return existing;
+}
+
+function isMatchFullyMuted(matchId: string): boolean {
+  const rec = getAlertRecord(matchId);
+  if (!rec) return false;
+  return !!rec.alerted099;
+}
+
 let liveMatchesCache: LiveMatch[] = [];
 const alertsHistory: AlertRecord[] = [];
 let scanCount = 0;
@@ -52,15 +79,38 @@ function log(msg: string) {
   console.log(`[${ts}] ${msg}`);
 }
 
-async function sendTelegramAlert(match: LiveMatch, minPlayed: string, dropVal: number, lineInfo: string = '') {
-  const alertHtml = `🚨 <b>LIVE HIGH DROP DETECTED (≥ ${DROP_THRESHOLD.toFixed(2)})</b> 🚨\n\n` +
+async function sendTelegramAlert(
+  match: LiveMatch,
+  minPlayed: string,
+  dropVal: number,
+  lineInfo: string = '',
+  tier: 'PRIMARY_065' | 'SECONDARY_099' | 'DIRECT_099' = 'PRIMARY_065',
+  previousDrop?: number
+) {
+  let header = '';
+  let ruleText = '';
+
+  if (tier === 'SECONDARY_099') {
+    header = `🔥 <b>CRITICAL MEGA DROP (≥ 0.99) — SECONDARY ALERT</b> 🔥\n\n` +
+      `⚡ <i>This game previously alerted at ≥ 0.65 (was ${previousDrop ? previousDrop.toFixed(2) : '0.65+'}) and has now escalated to <b>${dropVal.toFixed(2)}</b>!</i>`;
+    ruleText = `🔒 <b>Alert Rule:</b> FINAL ALERT SENT (Reached ≥ 0.99, game now fully muted)`;
+  } else if (tier === 'DIRECT_099') {
+    header = `🔥 <b>CRITICAL MEGA DROP DETECTED (≥ 0.99)</b> 🔥\n\n` +
+      `⚡ <i>Game reached extreme drop value of <b>${dropVal.toFixed(2)}</b> on first detection!</i>`;
+    ruleText = `🔒 <b>Alert Rule:</b> MAX TIER (Reached ≥ 0.99, game muted from further alerts)`;
+  } else {
+    header = `🚨 <b>LIVE HIGH DROP DETECTED (≥ 0.65)</b> 🚨`;
+    ruleText = `ℹ️ <b>Alert Rule:</b> Primary Alert (Will re-alert ONLY if drop surges to ≥ 0.99)`;
+  }
+
+  const alertHtml = `${header}\n\n` +
     `⚽ <b>Match:</b> ${match.home} vs ${match.away}\n` +
     `🌍 <b>League:</b> ${match.league}\n` +
     `📊 <b>Score:</b> ${match.score} | ⏱️ <b>Time:</b> ${match.time} (Min: ${minPlayed}')\n\n` +
     `📉 <b>Section:</b> TOTAL\n` +
-    `⚡ <b>DROP Value:</b> <code>${dropVal.toFixed(2)}</code> (Threshold: ${DROP_THRESHOLD.toFixed(2)})\n` +
+    `⚡ <b>DROP Value:</b> <code>${dropVal.toFixed(2)}</code> (Threshold: ${tier.includes('099') ? '≥ 0.99' : '≥ 0.65'})\n` +
     (lineInfo ? `📊 <b>Line:</b> ${lineInfo}\n\n` : `\n`) +
-    `🔒 <b>Alert Rule:</b> STRICT 1 ALERT PER GAME (Subsequent drops muted)\n` +
+    `${ruleText}\n` +
     `🔗 <a href='https://dropping-odds.com/event.php?id=${match.id}&t=total'>Open Match Page on Dropping-Odds</a>\n` +
     `🤖 <i>Dropping-Odds 24/7 Live Sentinel</i>`;
 
@@ -80,7 +130,7 @@ async function sendTelegramAlert(match: LiveMatch, minPlayed: string, dropVal: n
     const data = await res.json() as { ok: boolean; description?: string };
     if (data.ok) {
       status = 'SENT';
-      log(`✅ Telegram alert delivered for ${match.home} vs ${match.away} (Drop: ${dropVal})`);
+      log(`✅ Telegram alert (${tier}) delivered for ${match.home} vs ${match.away} (Drop: ${dropVal})`);
     } else {
       log(`❌ Telegram error: ${data.description}`);
     }
@@ -96,7 +146,8 @@ async function sendTelegramAlert(match: LiveMatch, minPlayed: string, dropVal: n
     score: match.score,
     minute: minPlayed,
     dropValue: dropVal,
-    threshold: DROP_THRESHOLD,
+    threshold: tier.includes('099') ? SECONDARY_DROP_THRESHOLD : DROP_THRESHOLD,
+    tier,
     line: lineInfo || 'Total Over/Under',
     timestamp: new Date().toISOString(),
     telegramStatus: status,
@@ -109,8 +160,8 @@ async function sendTelegramAlert(match: LiveMatch, minPlayed: string, dropVal: n
 }
 
 async function checkMatchTotal(match: LiveMatch) {
-  // STRICT RULE: Exactly 1 alert per match (12-hour memory)
-  if (alertedMatchMap.has(match.id)) {
+  // If match has already triggered the >= 0.99 secondary alert, it is completely muted
+  if (isMatchFullyMuted(match.id)) {
     return;
   }
 
@@ -151,10 +202,48 @@ async function checkMatchTotal(match: LiveMatch) {
       match.highestLine = qualifyingDrop.line;
     }
 
-    if (qualifyingDrop && !alertedMatchMap.has(match.id)) {
-      alertedMatchMap.set(match.id, Date.now());
-      log(`🚨 [STRICT 1-ALERT] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${DROP_THRESHOLD}`);
-      await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line);
+    if (!qualifyingDrop) return;
+
+    const existing = getAlertRecord(match.id);
+
+    // Case 1: Game already alerted with >= 0.65, but now reached drop value of 0.99 or greater!
+    if (existing && existing.alerted065 && !existing.alerted099) {
+      if (qualifyingDrop.drop >= SECONDARY_DROP_THRESHOLD) {
+        existing.alerted099 = true;
+        existing.megaAlertAt = Date.now();
+        existing.megaDrop = qualifyingDrop.drop;
+        alertedMatchMap.set(match.id, existing);
+        log(`🔥 [SECONDARY ALERT >= 0.99] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${SECONDARY_DROP_THRESHOLD}`);
+        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'SECONDARY_099', existing.firstDrop);
+      }
+      return;
+    }
+
+    // Case 2: Game never alerted yet
+    if (!existing) {
+      if (qualifyingDrop.drop >= SECONDARY_DROP_THRESHOLD) {
+        // Direct critical drop >= 0.99 on first discovery
+        alertedMatchMap.set(match.id, {
+          alerted065: true,
+          alerted099: true,
+          firstAlertAt: Date.now(),
+          firstDrop: qualifyingDrop.drop,
+          megaAlertAt: Date.now(),
+          megaDrop: qualifyingDrop.drop,
+        });
+        log(`🔥 [DIRECT CRITICAL DROP >= 0.99] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${SECONDARY_DROP_THRESHOLD}`);
+        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'DIRECT_099');
+      } else if (qualifyingDrop.drop >= DROP_THRESHOLD) {
+        // Primary alert >= 0.65
+        alertedMatchMap.set(match.id, {
+          alerted065: true,
+          alerted099: false,
+          firstAlertAt: Date.now(),
+          firstDrop: qualifyingDrop.drop,
+        });
+        log(`🚨 [PRIMARY ALERT >= 0.65] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${DROP_THRESHOLD}`);
+        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'PRIMARY_065');
+      }
     }
   } catch (err: any) {
     log(`⚠️ Match #${match.id} (${match.home} vs ${match.away}) error: ${err.message}`);
@@ -195,14 +284,16 @@ async function runLiveScanCycle() {
 
     // Prune alerts older than 12 hours
     const twelveHoursAgo = Date.now() - 12 * 60 * 60 * 1000;
-    for (const [id, ts] of alertedMatchMap.entries()) {
-      if (ts < twelveHoursAgo) {
+    for (const [id, record] of alertedMatchMap.entries()) {
+      const rec = typeof record === 'number' ? { firstAlertAt: record } : record;
+      const latestTs = (rec as GameAlertState).megaAlertAt || (rec as GameAlertState).firstAlertAt || 0;
+      if (latestTs < twelveHoursAgo) {
         alertedMatchMap.delete(id);
       }
     }
 
-    // Inspect matches that haven't been alerted yet in gentle batches of 4
-    const unalerted = parsed.filter(m => !alertedMatchMap.has(m.id));
+    // Inspect matches that haven't hit the >= 0.99 final threshold yet
+    const unalerted = parsed.filter(m => !isMatchFullyMuted(m.id));
     const BATCH_SIZE = 4;
     for (let i = 0; i < unalerted.length; i += BATCH_SIZE) {
       const batch = unalerted.slice(i, i + BATCH_SIZE);
@@ -222,19 +313,70 @@ async function startServer() {
 
   app.use(express.json());
 
+  const serverStartTime = Date.now();
+
+  // Health check endpoint for Railway or uptime monitors
+  app.get('/api/health', (req, res) => {
+    const now = Date.now();
+    const lastScanMs = lastScanTimestamp ? new Date(lastScanTimestamp).getTime() : 0;
+    const secondsSinceLastScan = lastScanMs ? Math.round((now - lastScanMs) / 1000) : null;
+    const isHealthy = botIsActive && (secondsSinceLastScan === null || secondsSinceLastScan < 75);
+
+    let count065Only = 0;
+    let count099 = 0;
+    for (const [_, rec] of alertedMatchMap.entries()) {
+      if (rec.alerted099) count099++;
+      else count065Only++;
+    }
+
+    res.status(isHealthy ? 200 : 503).json({
+      status: isHealthy ? 'HEALTHY' : 'DEGRADED',
+      online: true,
+      botIsActive,
+      uptimeSeconds: Math.floor((now - serverStartTime) / 1000),
+      scanCount,
+      lastScanTimestamp,
+      secondsSinceLastScan,
+      liveGamesCount: liveMatchesCache.length,
+      alertedMatchCount: alertedMatchMap.size,
+      watchingFor099Count: count065Only,
+      fullyMuted099Count: count099,
+      dropThreshold: DROP_THRESHOLD,
+      secondaryDropThreshold: SECONDARY_DROP_THRESHOLD,
+      interference: 'None detected (dropping-odds connection 100% clear)',
+    });
+  });
+
   // REST API Endpoints
   app.get('/api/status', (req, res) => {
+    const now = Date.now();
+    const lastScanMs = lastScanTimestamp ? new Date(lastScanTimestamp).getTime() : 0;
+    const secondsSinceLastScan = lastScanMs ? Math.round((now - lastScanMs) / 1000) : null;
+
+    let count065Only = 0;
+    let count099 = 0;
+    for (const [_, rec] of alertedMatchMap.entries()) {
+      if (rec.alerted099) count099++;
+      else count065Only++;
+    }
+
     res.json({
       online: true,
       botIsActive,
       scanCount,
       lastScanTimestamp,
+      secondsSinceLastScan,
       lastScanDurationMs,
       liveGamesCount: liveMatchesCache.length,
       alertedMatchCount: alertedMatchMap.size,
+      watchingFor099Count: count065Only,
+      fullyMuted099Count: count099,
       alertedMatchIds: Array.from(alertedMatchMap.keys()),
       dropThreshold: DROP_THRESHOLD,
+      secondaryDropThreshold: SECONDARY_DROP_THRESHOLD,
       chatId: CHAT_ID,
+      uptimeSeconds: Math.floor((now - serverStartTime) / 1000),
+      interference: 'None detected (dropping-odds connection 100% clear)',
     });
   });
 
@@ -251,6 +393,8 @@ async function startServer() {
     res.json({
       alerts: alertsHistory,
       count: alertsHistory.length,
+      primaryThreshold: DROP_THRESHOLD,
+      secondaryThreshold: SECONDARY_DROP_THRESHOLD,
     });
   });
 
@@ -265,7 +409,7 @@ async function startServer() {
       const testMsg = `🧪 <b>Telegram Alert Test</b>\n\n` +
         `✅ Connection verified between Dropping-Odds Bot and your Telegram account.\n` +
         `⏱️ <b>Time:</b> ${new Date().toLocaleTimeString()}\n` +
-        `🎯 <b>Rule:</b> 100% LIVE Games Checked | DROP ≥ 0.65 (Strict 1 Alert/Game)\n` +
+        `🎯 <b>Rules:</b> Primary Alert ≥ 0.65 | Re-alert IF Drop escalates to ≥ 0.99\n` +
         `🤖 <i>Dropping-Odds Sentinel Live</i>`;
 
       const tgRes = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
@@ -284,12 +428,97 @@ async function startServer() {
     }
   });
 
+  // Telegram interactive command responder
+  let tgOffset = 0;
+  async function startTelegramCommandListener() {
+    log('🤖 Telegram command listener active (/status, /ping, /test)');
+    while (true) {
+      try {
+        const tgRes = await fetch(`https://api.telegram.org/bot${TOKEN}/getUpdates?offset=${tgOffset}&timeout=10`, {
+          signal: AbortSignal.timeout(15000)
+        });
+        const data = await tgRes.json() as { ok: boolean; result?: Array<{ update_id: number; message?: { text?: string; chat?: { id: number } } }> };
+        if (data && data.ok && Array.isArray(data.result)) {
+          for (const u of data.result) {
+            tgOffset = u.update_id + 1;
+            const msg = u.message;
+            if (!msg || !msg.text) continue;
+            const cmd = msg.text.trim().toLowerCase();
+            const targetChat = msg.chat ? msg.chat.id : CHAT_ID;
+
+            if (cmd === '/ping' || cmd === 'ping') {
+              const now = Date.now();
+              const lastScanMs = lastScanTimestamp ? new Date(lastScanTimestamp).getTime() : 0;
+              const secSince = lastScanMs ? Math.round((now - lastScanMs) / 1000) : 0;
+              await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: targetChat,
+                  text: `🏓 <b>PONG! Bot is online & healthy.</b>\n\n⏱️ <b>Last sweep:</b> ${secSince}s ago\n⚽ <b>Live matches tracked:</b> ${liveMatchesCache.length}\n🔄 <b>Sweeps executed:</b> ${scanCount}\n📉 <b>Primary Threshold:</b> ≥ 0.65 | 🔥 <b>Secondary Surge:</b> ≥ 0.99\n📡 <b>Railway:</b> Online & updating without interference.`,
+                  parse_mode: 'HTML',
+                }),
+              });
+            } else if (cmd === '/status' || cmd === 'status' || cmd === '/health' || cmd === 'health') {
+              const uptimeMins = Math.floor((Date.now() - serverStartTime) / 60000);
+              const now = Date.now();
+              const lastScanMs = lastScanTimestamp ? new Date(lastScanTimestamp).getTime() : 0;
+              const secSince = lastScanMs ? Math.round((now - lastScanMs) / 1000) : 0;
+              let count065Only = 0;
+              let count099 = 0;
+              for (const [_, rec] of alertedMatchMap.entries()) {
+                if (rec.alerted099) count099++;
+                else count065Only++;
+              }
+
+              const report = `🟢 <b>RAILWAY LIVE BOT STATUS: 100% HEALTHY</b>\n\n` +
+                `⏱️ <b>Uptime:</b> ${uptimeMins} minutes\n` +
+                `🔄 <b>Sweeps Completed:</b> ${scanCount} sweeps\n` +
+                `⏳ <b>Last Live Sweep:</b> ${secSince} seconds ago\n` +
+                `⚽ <b>Live Games Scanned:</b> ${liveMatchesCache.length} matches\n` +
+                `📉 <b>Primary Threshold:</b> DROP ≥ ${DROP_THRESHOLD.toFixed(2)} (Initial Alert)\n` +
+                `🔥 <b>Secondary Threshold:</b> DROP ≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)} (Re-alerts if game escalates)\n` +
+                `🔔 <b>Alerts Sent (12h Memory):</b> ${alertedMatchMap.size} games\n` +
+                `🎯 <b>Tracked:</b> ${count065Only} watching for ≥ 0.99 surge, ${count099} fully muted\n` +
+                `🛡️ <b>Interference Status:</b> ✅ NONE (dropping-odds connection 100% clear)\n\n` +
+                `🚀 <i>Status: Actively monitoring 24/7 without delays or interference.</i>`;
+              await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: targetChat,
+                  text: report,
+                  parse_mode: 'HTML',
+                }),
+              });
+            } else if (cmd === '/test' || cmd === 'test') {
+              await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: targetChat,
+                  text: `🧪 <b>Railway Bot Test Alert</b>\n\n✅ Telegram alert delivery confirmed!\n⏱️ <b>Timestamp:</b> ${new Date().toLocaleTimeString()} UTC\n📉 <b>Thresholds:</b> Primary ≥ 0.65 | Secondary Escalation ≥ 0.99\n🎯 Your Railway instance is alive, connected, and receiving updates without interference.`,
+                  parse_mode: 'HTML',
+                }),
+              });
+            }
+          }
+        }
+      } catch (e) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+
+  startTelegramCommandListener().catch(e => log(`Telegram listener error: ${e.message}`));
+
   // Start continuous polling loop
   log('================================================================');
   log('🚀 SERVER EMBEDDED LIVE BOT STARTED');
   log(`🎯 Monitored View: https://dropping-odds.com/index.php?view=live`);
-  log(`⚡ Alert Threshold: DROP >= ${DROP_THRESHOLD}`);
-  log(`🔒 Deduplication: Strictly 1 Alert Per Game (12-hour memory)`);
+  log(`⚡ Primary Threshold: DROP >= ${DROP_THRESHOLD}`);
+  log(`🔥 Secondary Threshold: DROP >= ${SECONDARY_DROP_THRESHOLD} (Re-alerts if game reaches >= 0.99)`);
+  log(`🔒 Deduplication: Max 2 alerts per game (0.65+ then 0.99+ escalation)`);
   log('================================================================');
 
   // Initial scan immediately

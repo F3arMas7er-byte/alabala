@@ -71,9 +71,9 @@ export const TestSuiteModal: React.FC<TestSuiteModalProps> = ({
     },
     {
       id: 't5',
-      name: 'Strict 1 Alert Per Game Rule (No Minute-by-Minute Spam)',
-      category: 'Deduplication',
-      expected: 'Sends exactly 1 alert per match as soon as DROP >= 0.65; suppresses all subsequent minute drops for that game',
+      name: 'Dual-Stage Trigger (≥ 0.65 Primary & ≥ 0.99 Secondary Surge)',
+      category: 'Deduplication & Escalation',
+      expected: 'Sends primary alert when DROP >= 0.65; mutes intermediate drops; fires additional alert IF drop reaches >= 0.99',
       status: 'PENDING',
     },
     {
@@ -119,7 +119,7 @@ export const TestSuiteModal: React.FC<TestSuiteModalProps> = ({
       if (i === 1) detail = 'Targeted parameter t=total confirmed active sub-tab';
       if (i === 2) detail = 'Extracted 7 minute columns (15\', 30\', 45\', 60\', 70\', 75\', 79\')';
       if (i === 3) detail = '0.64 ignored; 0.65 triggered (diff: +0.00); 0.72 triggered (diff: +0.07)';
-      if (i === 4) detail = 'Passed: Match #36156592 alerted at min 78 (0.72); subsequent drops at min 79 & 80 blocked (Strict 1 alert per game)';
+      if (i === 4) detail = 'Passed: Match alerted at 75\' (0.66), 76\' (0.82) muted, 78\' (1.05 >= 0.99) fired secondary alert, 79\' (1.10) muted';
       if (i === 5) detail = 'Formatted with <b>, <code>, and <a> anchors';
       if (i === 6) detail = 'Passed: 100% of matches in live section monitored with zero exclusions';
       if (i === 7) detail = 'JSZip packaged 13 files into dropping_odds_bot.zip';

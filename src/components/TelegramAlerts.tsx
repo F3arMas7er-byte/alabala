@@ -353,8 +353,8 @@ export const TelegramAlerts: React.FC<TelegramAlertsProps> = ({
             <h3 className="text-base font-extrabold text-zinc-100">
               Triggered Drop Alerts Feed ({alerts.length})
             </h3>
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/10 text-blue-300 border border-blue-500/20">
-              1 ALERT / GAME (NO MINUTE SPAM)
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+              PRIMARY ≥ 0.65 | RE-ALERTS AT ≥ 0.99
             </span>
           </div>
 
@@ -374,7 +374,7 @@ export const TelegramAlerts: React.FC<TelegramAlertsProps> = ({
             <ShieldAlert className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
             <h4 className="text-sm font-bold text-zinc-300">No Alerts Triggered Yet</h4>
             <p className="text-xs text-zinc-500 mt-1 max-w-md mx-auto">
-              When any live game&apos;s horizontal DROP matrix column under the &quot;TOTAL&quot; section hits 0.65 or higher, an instant notification is logged and dispatched to your Telegram here (strictly 1 alert per game).
+              When any live game&apos;s horizontal DROP matrix column under the &quot;TOTAL&quot; section hits 0.65 or higher, an instant notification is logged and dispatched. If that game subsequently escalates to a drop value of 0.99 or greater, a secondary alert is dispatched.
             </p>
           </div>
         ) : (

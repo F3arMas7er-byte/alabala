@@ -212,35 +212,82 @@ sudo systemctl status dropping-odds-bot`;
             </div>
             <div>
               <h3 className="text-base font-extrabold text-zinc-100">
-                Railway.com: 24/7 Reliable Setup Guide
+                Railway.com: 24/7 Reliable Setup & Live Testing Guide
               </h3>
-              <span className="text-[11px] text-emerald-400 font-mono">Bulletproof configuration for Railway</span>
+              <span className="text-[11px] text-emerald-400 font-mono">Bulletproof configuration & zero-interference testing</span>
             </div>
           </div>
-          <div className="space-y-2.5 text-xs text-zinc-300">
-            <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
-              <strong className="text-emerald-400 block">1. Recommended Start Command (Ultra-Lightweight Worker)</strong>
-              <p className="text-zinc-400">
+          <div className="space-y-3 text-xs text-zinc-300">
+            <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1.5">
+              <strong className="text-emerald-400 block font-semibold">1. Recommended Start Command (Worker Daemon)</strong>
+              <p className="text-zinc-400 leading-relaxed">
                 In Railway under <span className="text-zinc-200 font-mono">Service &rarr; Settings &rarr; Deploy &rarr; Custom Start Command</span>, enter:
               </p>
-              <code className="block font-mono text-emerald-300 bg-black/50 p-2 rounded border border-zinc-800">
+              <code className="block font-mono text-emerald-300 bg-black/60 p-2 rounded border border-zinc-800">
                 node live-bot-daemon.cjs
               </code>
               <p className="text-zinc-400 text-[11px]">
-                This runs the pure Node.js live daemon with 0 external dependencies, consumes under 20MB of RAM, and never crashes.
+                Runs the pure Node.js daemon with 0 heavy overhead, uses &lt;25MB RAM, and never crashes.
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
-              <strong className="text-zinc-100 block">2. Turn OFF &quot;Sleep Application&quot;</strong>
-              <p className="text-zinc-400">
-                In Railway under <span className="text-zinc-200 font-mono">Settings &rarr; General</span>, disable <strong>&quot;Sleep Application&quot;</strong> so Railway does not put your bot to sleep when there are no incoming HTTP visits.
+
+            <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1.5">
+              <strong className="text-zinc-100 block font-semibold">2. Turn OFF &quot;Sleep Application&quot; (Crucial)</strong>
+              <p className="text-zinc-400 leading-relaxed">
+                In Railway under <span className="text-zinc-200 font-mono">Settings &rarr; General</span>, ensure <strong>&quot;Sleep Application&quot;</strong> is toggled <strong>OFF</strong> so Railway never suspends the bot when there is no incoming web traffic.
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
-              <strong className="text-zinc-100 block">3. Full Dashboard (Web Service)</strong>
-              <p className="text-zinc-400">
-                If you prefer the web interface alongside the bot, set Start Command to <code className="text-zinc-200">npm start</code> (runs <code className="text-zinc-200">tsx server.ts</code>). The server binds automatically to Railway&apos;s dynamic <code className="text-zinc-200">PORT</code>.
+
+            <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-amber-500/30 space-y-1.5">
+              <strong className="text-amber-400 block font-semibold">3. Dual-Threshold Alert Logic (0.65 &amp; 0.99)</strong>
+              <p className="text-zinc-400 leading-relaxed">
+                • <strong>Primary Alert:</strong> Triggers immediately when any live match reaches <code className="text-emerald-300">DROP &ge; 0.65</code>.<br />
+                • <strong>Secondary Alert:</strong> If that match was already alerted and continues to rise, the bot dispatches an additional alert <strong>ONLY IF</strong> the drop escalates to <code className="text-amber-300 font-bold">DROP &ge; 0.99</code>. All other intermediate drops remain muted to prevent spam.
               </p>
+            </div>
+
+            {/* Verification & Testing Box */}
+            <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-2.5">
+              <div className="flex items-center space-x-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <strong className="text-emerald-300 font-bold text-xs uppercase tracking-wider">
+                  How to Test if Railway is Online &amp; Updating Without Interference:
+                </strong>
+              </div>
+              <ul className="space-y-2 text-zinc-300 pl-1">
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-400 font-bold">A.</span>
+                  <div>
+                    <strong className="text-zinc-100">Direct Telegram Test (Fastest):</strong>
+                    <p className="text-zinc-400 mt-0.5">
+                      Send <code className="text-emerald-300 bg-zinc-900 px-1.5 py-0.5 rounded">/status</code> or <code className="text-emerald-300 bg-zinc-900 px-1.5 py-0.5 rounded">/ping</code> to your Telegram bot. The bot immediately replies with current uptime, sweeps completed, and live games actively scanned.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-400 font-bold">B.</span>
+                  <div>
+                    <strong className="text-zinc-100">Watch Railway Live Logs Stream:</strong>
+                    <p className="text-zinc-400 mt-0.5">
+                      In Railway, click on your service &rarr; <strong>Deploy Logs</strong>. You will see a live scan cycle output every 25 seconds:
+                      <code className="block text-[11px] font-mono text-zinc-300 bg-black/60 p-1.5 rounded mt-1 border border-zinc-800">
+                        [timestamp] 🔍 Scanning LIVE games on dropping-odds.com...<br />
+                        [timestamp] Live table parsed: 14 games. Active alerts in memory: 1 (Sweep #32)
+                      </code>
+                      If the sweep numbers and timestamps advance every 25 seconds, the bot is running continuously with zero lag or interference.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-400 font-bold">C.</span>
+                  <div>
+                    <strong className="text-zinc-100">Live Health API (If deployed as Web Service):</strong>
+                    <p className="text-zinc-400 mt-0.5">
+                      If running <code className="text-zinc-200">npm start</code>, visit <code className="text-emerald-300 bg-zinc-900 px-1.5 py-0.5 rounded">https://your-domain.up.railway.app/api/health</code>. The JSON reports <code className="text-zinc-200 font-mono">&quot;status&quot;: &quot;HEALTHY&quot;</code> and <code className="text-zinc-200 font-mono">&quot;secondsSinceLastScan&quot;</code> (&lt;30s).
+                    </p>
+                  </div>
+                </li>
+              </ul>
             </div>
           </div>
         </div>

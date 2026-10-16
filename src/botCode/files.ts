@@ -401,8 +401,8 @@ class OddsMonitor:
             chat_id=config.telegram_chat_id
         )
         self.active_matches: Dict[str, Match] = {}
-        # Stores match_ids to ensure EXACTLY 1 alert per game
-        self.alerted_match_ids: Set[str] = set()
+        # Stores match alert stages: match_id -> {'alerted_065': bool, 'alerted_099': bool}
+        self.alerted_match_stages: Dict[str, dict] = {}
         self.is_running = False
         self.scraper: PlaywrightScraper = None
 
@@ -413,7 +413,8 @@ class OddsMonitor:
         logger.info("🚀 DROPPING-ODDS 24/7 MONITOR BOT STARTED")
         logger.info(f"🎯 Target URL: https://dropping-odds.com/index.php?view=live")
         logger.info(f"📊 Monitored Section: Dropping Odds -> TOTAL tab")
-        logger.info(f"⚡ Alert Threshold: DROP >= {self.config.drop_threshold}")
+        logger.info(f"⚡ Primary Threshold: DROP >= {self.config.drop_threshold}")
+        logger.info(f"🔥 Secondary Threshold: DROP >= 0.99 (Re-alerts if game escalates)")
         logger.info(f"⏱️ Check Interval: {self.config.live_check_interval}s")
         logger.info("==================================================")
 
@@ -475,9 +476,10 @@ class OddsMonitor:
             logger.error(f"Error during check cycle: {e}", exc_info=True)
 
     async def _check_match_drop(self, match: Match):
-        """Checks the TOTAL section of a match. Sends EXACTLY 1 alert per game when DROP >= threshold."""
-        # STRICT RULE: 1 alert per game only!
-        if match.id in self.alerted_match_ids:
+        """Checks the TOTAL section of a match. Sends primary alert at >= 0.65, and re-alerts ONLY IF drop reaches >= 0.99."""
+        stage = self.alerted_match_stages.get(match.id, {})
+        # If game has already reached the >= 0.99 secondary tier, it is fully muted
+        if stage.get('alerted_099'):
             return
 
         try:
@@ -492,26 +494,80 @@ class OddsMonitor:
             # Keep the highest drop detected
             best_dp = max(qualifying, key=lambda x: x.drop_value)
 
-            self.alerted_match_ids.add(match.id)
-            logger.warning(
-                f"🚨 [1-ALERT-PER-GAME] Match: {match.home_team} vs {match.away_team} | "
-                f"Live: {match.time_str} | Drop Min: {best_dp.minute}' | DROP: {best_dp.drop_value:.2f} >= {self.config.drop_threshold}"
-            )
-            alert = Alert(
-                match_id=match.id,
-                country=match.country,
-                league=match.league,
-                home_team=match.home_team,
-                away_team=match.away_team,
-                score=match.score,
-                minute=best_dp.minute,
-                time_str=match.time_str,
-                drop_value=best_dp.drop_value,
-                threshold=self.config.drop_threshold,
-                match_url=match.url,
-                timestamp=datetime.now(timezone.utc).isoformat()
-            )
-            await self.notifier.send_drop_alert(alert)
+            # Case 1: Game already alerted with >= 0.65, now reached >= 0.99
+            if stage.get('alerted_065') and not stage.get('alerted_099'):
+                if best_dp.drop_value >= 0.99:
+                    stage['alerted_099'] = True
+                    self.alerted_match_stages[match.id] = stage
+                    logger.warning(
+                        f"🔥 [SECONDARY ALERT >= 0.99] Match: {match.home_team} vs {match.away_team} | "
+                        f"Live: {match.time_str} | Drop Min: {best_dp.minute}' | DROP: {best_dp.drop_value:.2f} >= 0.99"
+                    )
+                    alert = Alert(
+                        match_id=match.id,
+                        country=match.country,
+                        league=match.league,
+                        home_team=match.home_team,
+                        away_team=match.away_team,
+                        score=match.score,
+                        minute=best_dp.minute,
+                        time_str=match.time_str,
+                        drop_value=best_dp.drop_value,
+                        threshold=0.99,
+                        match_url=match.url,
+                        timestamp=datetime.now(timezone.utc).isoformat()
+                    )
+                    await self.notifier.send_drop_alert(alert)
+                return
+
+            # Case 2: Game not yet alerted
+            if not stage.get('alerted_065'):
+                if best_dp.drop_value >= 0.99:
+                    stage['alerted_065'] = True
+                    stage['alerted_099'] = True
+                    self.alerted_match_stages[match.id] = stage
+                    logger.warning(
+                        f"🔥 [DIRECT CRITICAL DROP >= 0.99] Match: {match.home_team} vs {match.away_team} | "
+                        f"Live: {match.time_str} | Drop Min: {best_dp.minute}' | DROP: {best_dp.drop_value:.2f} >= 0.99"
+                    )
+                    alert = Alert(
+                        match_id=match.id,
+                        country=match.country,
+                        league=match.league,
+                        home_team=match.home_team,
+                        away_team=match.away_team,
+                        score=match.score,
+                        minute=best_dp.minute,
+                        time_str=match.time_str,
+                        drop_value=best_dp.drop_value,
+                        threshold=0.99,
+                        match_url=match.url,
+                        timestamp=datetime.now(timezone.utc).isoformat()
+                    )
+                    await self.notifier.send_drop_alert(alert)
+                elif best_dp.drop_value >= self.config.drop_threshold:
+                    stage['alerted_065'] = True
+                    stage['alerted_099'] = False
+                    self.alerted_match_stages[match.id] = stage
+                    logger.warning(
+                        f"🚨 [PRIMARY ALERT >= 0.65] Match: {match.home_team} vs {match.away_team} | "
+                        f"Live: {match.time_str} | Drop Min: {best_dp.minute}' | DROP: {best_dp.drop_value:.2f} >= {self.config.drop_threshold}"
+                    )
+                    alert = Alert(
+                        match_id=match.id,
+                        country=match.country,
+                        league=match.league,
+                        home_team=match.home_team,
+                        away_team=match.away_team,
+                        score=match.score,
+                        minute=best_dp.minute,
+                        time_str=match.time_str,
+                        drop_value=best_dp.drop_value,
+                        threshold=self.config.drop_threshold,
+                        match_url=match.url,
+                        timestamp=datetime.now(timezone.utc).isoformat()
+                    )
+                    await self.notifier.send_drop_alert(alert)
 
         except Exception as e:
             logger.debug(f"Could not inspect match #{match.id}: {e}")
@@ -851,20 +907,27 @@ class TestDroppingOddsBot(unittest.TestCase):
         self.assertEqual(matches[0].home_team, "Moravia (W)")
         self.assertEqual(matches[1].home_team, "Flamengo U20")
 
-    def test_strict_one_alert_per_game_rule(self):
-        """Verifies strictly 1 alert is dispatched per match; subsequent minute drops are suppressed."""
-        alerted_match_ids = set()
+    def test_dual_stage_alerting_rule(self):
+        """Verifies initial alert fires at >= 0.65, intermediate drops are suppressed, and re-alert fires ONLY IF drop reaches >= 0.99."""
+        alerted_stages = {}
         alerts_sent = []
         match_id = "36156592"
-        # Simulate drops over minutes 75' (0.66), 76' (0.69), 78' (0.72)
-        minute_drops = [(75, 0.66), (76, 0.69), (78, 0.72)]
+        # Simulate minute-by-minute drops: 75' (0.66), 76' (0.82), 78' (1.05), 79' (1.10)
+        minute_drops = [(75, 0.66), (76, 0.82), (78, 1.05), (79, 1.10)]
         for minute, drop in minute_drops:
-            if drop >= 0.65 and match_id not in alerted_match_ids:
-                alerted_match_ids.add(match_id)
-                alerts_sent.append((minute, drop))
-        # STRICT RULE: exactly 1 alert sent for this game!
-        self.assertEqual(len(alerts_sent), 1)
-        self.assertEqual(alerts_sent[0], (75, 0.66))
+            stage = alerted_stages.get(match_id, {})
+            if not stage.get('alerted_065') and drop >= 0.65:
+                stage['alerted_065'] = True
+                alerted_stages[match_id] = stage
+                alerts_sent.append(('INITIAL_065', minute, drop))
+            elif stage.get('alerted_065') and not stage.get('alerted_099') and drop >= 0.99:
+                stage['alerted_099'] = True
+                alerted_stages[match_id] = stage
+                alerts_sent.append(('SECONDARY_099', minute, drop))
+        # Total alerts must be exactly 2
+        self.assertEqual(len(alerts_sent), 2)
+        self.assertEqual(alerts_sent[0], ('INITIAL_065', 75, 0.66))
+        self.assertEqual(alerts_sent[1], ('SECONDARY_099', 78, 1.05))
 
 if __name__ == "__main__":
     unittest.main()
@@ -1033,8 +1096,8 @@ A production-grade 24/7 monitoring service for **https://dropping-odds.com/index
    \`COUNTRY\` | \`LEAGUE\` | \`HOME\` | \`SCORE\` | \`AWAY\` | \`TIME\`
 2. **Real-time Lifecycle**: Automatically tracks new incoming games and cleans up concluded games.
 3. **TOTAL Section Drop Matrix**: Follows the redirect to each individual game page, navigates to the **TOTAL** sub-page (among \`1X2\`, \`TOTAL\`, \`HANDICAP\`, \`HT TOTAL\`, \`HT 1X2\`), and extracts the minute-by-minute horizontal **"DROP"** graph.
-4. **0.65+ Threshold Alerts**: Fires immediate Telegram notifications when \`DROP >= 0.65\`.
-5. **Strict 1 Alert Per Game Rule**: Never spams; stores \`match_id\` to dispatch strictly 1 alert per game when DROP >= 0.65. All subsequent minute-by-minute drops for that match are completely suppressed.
+4. **0.65+ Primary Threshold Alerts**: Fires immediate Telegram notifications when \`DROP >= 0.65\`.
+5. **0.99+ Secondary Surge Re-Alert Rule**: If a match was already alerted at 0.65+ and subsequently escalates to \`DROP >= 0.99\`, the bot sends an additional high-priority alert. All other intermediate drops remain muted to prevent spam.
 
 ## Quick Start
 \`\`\`bash
