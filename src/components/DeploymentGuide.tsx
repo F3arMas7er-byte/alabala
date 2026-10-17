@@ -101,7 +101,7 @@ sudo systemctl status dropping-odds-bot`;
               Save &amp; Download Your 24/7 Bot
             </h2>
             <p className="text-sm text-zinc-300 leading-relaxed">
-              Everything requested is bundled: scraper for <strong className="text-emerald-400">&quot;Dropping Odds&quot;</strong>, redirect handler, <strong className="text-emerald-400">&quot;TOTAL&quot;</strong> sub-page parser for the horizontal minute-by-minute <strong className="text-emerald-400">&quot;DROP&quot;</strong> graph, Telegram dispatcher for drops &ge; 0.65, Dockerfile, and tests.
+              Everything requested is bundled: scraper for <strong className="text-emerald-400">&quot;Dropping Odds&quot;</strong>, redirect handler, <strong className="text-emerald-400">&quot;TOTAL&quot;</strong> sub-page parser for the horizontal minute-by-minute <strong className="text-emerald-400">&quot;DROP&quot;</strong> graph, Telegram dispatcher for drops &ge; 0.90 / &ge; 1.10, Dockerfile, and tests.
             </p>
           </div>
 
@@ -239,10 +239,10 @@ sudo systemctl status dropping-odds-bot`;
             </div>
 
             <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-amber-500/30 space-y-1.5">
-              <strong className="text-amber-400 block font-semibold">3. Dual-Threshold Alert Logic (0.65 &amp; 0.99)</strong>
+              <strong className="text-amber-400 block font-semibold">3. Dual-Threshold Alert Logic (0.90 &amp; 1.10)</strong>
               <p className="text-zinc-400 leading-relaxed">
-                • <strong>Primary Alert:</strong> Triggers immediately when any live match reaches <code className="text-emerald-300">DROP &ge; 0.65</code>.<br />
-                • <strong>Secondary Alert:</strong> If that match was already alerted and continues to rise, the bot dispatches an additional alert <strong>ONLY IF</strong> the drop escalates to <code className="text-amber-300 font-bold">DROP &ge; 0.99</code>. All other intermediate drops remain muted to prevent spam.
+                • <strong>Primary Alert:</strong> Triggers immediately when any live match reaches <code className="text-emerald-300">DROP &ge; 0.90</code>.<br />
+                • <strong>Secondary Alert:</strong> If that match was already alerted and continues to rise, the bot dispatches an additional alert <strong>ONLY IF</strong> the drop escalates to <code className="text-amber-300 font-bold">DROP &ge; 1.10</code>. All other intermediate drops remain muted to prevent spam.
               </p>
             </div>
 

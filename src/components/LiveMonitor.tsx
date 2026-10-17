@@ -274,8 +274,8 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                             }`}
                             title={
                               hasAlerted
-                                ? 'This match has already sent its 1 alert (subsequent minute drops are blocked)'
-                                : 'Simulate sudden drop spike >= 0.65'
+                                ? 'This match has already sent its alert (subsequent drops below 1.10 are blocked)'
+                                : 'Simulate sudden drop spike >= 0.90'
                             }
                           >
                             <Zap className="w-3.5 h-3.5" />

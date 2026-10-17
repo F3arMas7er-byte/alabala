@@ -39,18 +39,18 @@ try {
 
 const TOKEN = '8249195603:AAHwKdMhC8MUNN10rfoKpkNI5ka_33w3phs';
 const CHAT_ID = '2065059615';
-const DROP_THRESHOLD = 0.65;
-const SECONDARY_DROP_THRESHOLD = 0.99;
+const DROP_THRESHOLD = 0.90;
+const SECONDARY_DROP_THRESHOLD = 1.10;
 const POLL_INTERVAL_MS = 25000; // 25s between live sweeps
 
-// Map of matchId -> { alerted065: boolean, alerted099: boolean, firstAlertAt: number, firstDrop: number, megaAlertAt?: number, megaDrop?: number }
+// Map of matchId -> { alertedPrimary: boolean, alertedSecondary: boolean, firstAlertAt: number, firstDrop: number, megaAlertAt?: number, megaDrop?: number }
 const alertedMatchMap = new Map();
 
 function getAlertRecord(matchId) {
   const existing = alertedMatchMap.get(matchId);
   if (!existing) return null;
   if (typeof existing === 'number') {
-    return { alerted065: true, alerted099: false, firstAlertAt: existing, firstDrop: 0.65 };
+    return { alertedPrimary: true, alertedSecondary: false, firstAlertAt: existing, firstDrop: DROP_THRESHOLD };
   }
   return existing;
 }
@@ -58,8 +58,8 @@ function getAlertRecord(matchId) {
 function isMatchFullyMuted(matchId) {
   const rec = getAlertRecord(matchId);
   if (!rec) return false;
-  // If game has already received the 0.99+ secondary alert, it is completely muted
-  return !!rec.alerted099;
+  // If game has already received the 1.10+ secondary alert, it is completely muted
+  return !!(rec.alertedSecondary || rec.alerted099);
 }
 
 // Runtime Health & Verification Stats
@@ -98,23 +98,26 @@ async function sendTelegramMessage(text, targetChatId = CHAT_ID) {
   }
 }
 
-async function sendTelegramAlert(match, minPlayed, dropVal, lineInfo = '', tier = 'PRIMARY_065', previousDrop = null) {
+async function sendTelegramAlert(match, minPlayed, dropVal, lineInfo = '', tier = 'PRIMARY', previousDrop = null) {
   botStats.totalAlertsSent++;
 
   let header = '';
   let ruleText = '';
 
-  if (tier === 'SECONDARY_099') {
-    header = `🔥 <b>CRITICAL MEGA DROP (≥ 0.99) — SECONDARY ALERT</b> 🔥\n\n` +
-      `⚡ <i>This game previously alerted at ≥ 0.65 (was ${previousDrop ? previousDrop.toFixed(2) : '0.65+'}) and has now escalated to <b>${dropVal.toFixed(2)}</b>!</i>`;
-    ruleText = `🔒 <b>Alert Rule:</b> FINAL ALERT SENT (Reached ≥ 0.99, game now fully muted)`;
-  } else if (tier === 'DIRECT_099') {
-    header = `🔥 <b>CRITICAL MEGA DROP DETECTED (≥ 0.99)</b> 🔥\n\n` +
+  const isSecondary = tier === 'SECONDARY_SURGE' || tier === 'SECONDARY_099';
+  const isDirect = tier === 'DIRECT_CRITICAL' || tier === 'DIRECT_099';
+
+  if (isSecondary) {
+    header = `🔥 <b>CRITICAL MEGA DROP (≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)}) — SECONDARY ALERT</b> 🔥\n\n` +
+      `⚡ <i>This game previously alerted at ≥ ${DROP_THRESHOLD.toFixed(2)} (was ${previousDrop ? previousDrop.toFixed(2) : DROP_THRESHOLD.toFixed(2)}) and has now escalated to <b>${dropVal.toFixed(2)}</b>!</i>`;
+    ruleText = `🔒 <b>Alert Rule:</b> FINAL ALERT SENT (Reached ≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)}, game now fully muted)`;
+  } else if (isDirect) {
+    header = `🔥 <b>CRITICAL MEGA DROP DETECTED (≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)})</b> 🔥\n\n` +
       `⚡ <i>Game reached extreme drop value of <b>${dropVal.toFixed(2)}</b> on first detection!</i>`;
-    ruleText = `🔒 <b>Alert Rule:</b> MAX TIER (≥ 0.99 reached, game muted from further alerts)`;
+    ruleText = `🔒 <b>Alert Rule:</b> MAX TIER (≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)} reached, game muted from further alerts)`;
   } else {
-    header = `🚨 <b>LIVE HIGH DROP DETECTED (≥ 0.65)</b> 🚨`;
-    ruleText = `ℹ️ <b>Alert Rule:</b> Primary Alert (Will re-alert ONLY if drop surges to ≥ 0.99)`;
+    header = `🚨 <b>LIVE HIGH DROP DETECTED (≥ ${DROP_THRESHOLD.toFixed(2)})</b> 🚨`;
+    ruleText = `ℹ️ <b>Alert Rule:</b> Primary Alert (Will re-alert ONLY if drop surges to ≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)})`;
   }
 
   const alertHtml = `${header}\n\n` +
@@ -122,7 +125,7 @@ async function sendTelegramAlert(match, minPlayed, dropVal, lineInfo = '', tier 
     `🌍 <b>League:</b> ${match.league}\n` +
     `📊 <b>Score:</b> ${match.score} | ⏱️ <b>Time:</b> ${match.time} (Min: ${minPlayed}')\n\n` +
     `📉 <b>Section:</b> TOTAL\n` +
-    `⚡ <b>DROP Value:</b> <code>${dropVal.toFixed(2)}</code> (Threshold: ${tier.includes('099') ? '≥ 0.99' : '≥ 0.65'})\n` +
+    `⚡ <b>DROP Value:</b> <code>${dropVal.toFixed(2)}</code> (Threshold: ${isSecondary || isDirect ? `≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)}` : `≥ ${DROP_THRESHOLD.toFixed(2)}`})\n` +
     (lineInfo ? `📊 <b>Line:</b> ${lineInfo}\n\n` : `\n`) +
     `${ruleText}\n` +
     `🔗 <a href='https://dropping-odds.com/event.php?id=${match.id}&t=total'>Open Match Page on Dropping-Odds</a>\n` +
@@ -137,7 +140,7 @@ async function sendTelegramAlert(match, minPlayed, dropVal, lineInfo = '', tier 
 }
 
 async function checkMatchTotal(match) {
-  // If match has already triggered the >= 0.99 secondary alert, it is completely muted
+  // If match has already triggered the >= 1.10 secondary alert, it is completely muted
   if (isMatchFullyMuted(match.id)) {
     return;
   }
@@ -178,15 +181,16 @@ async function checkMatchTotal(match) {
 
     const existing = getAlertRecord(match.id);
 
-    // Case 1: Game already alerted with >= 0.65, but now reached drop value of 0.99 or greater!
-    if (existing && existing.alerted065 && !existing.alerted099) {
+    // Case 1: Game already alerted with primary threshold (>= 0.90), but now reached >= 1.10!
+    if (existing && !isMatchFullyMuted(match.id)) {
       if (qualifyingDrop.drop >= SECONDARY_DROP_THRESHOLD) {
+        existing.alertedSecondary = true;
         existing.alerted099 = true;
         existing.megaAlertAt = Date.now();
         existing.megaDrop = qualifyingDrop.drop;
         alertedMatchMap.set(match.id, existing);
-        log(`🔥 [SECONDARY ALERT >= 0.99] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${SECONDARY_DROP_THRESHOLD}`);
-        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'SECONDARY_099', existing.firstDrop);
+        log(`🔥 [SECONDARY ALERT >= ${SECONDARY_DROP_THRESHOLD.toFixed(2)}] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${SECONDARY_DROP_THRESHOLD}`);
+        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'SECONDARY_SURGE', existing.firstDrop);
       }
       return;
     }
@@ -194,8 +198,10 @@ async function checkMatchTotal(match) {
     // Case 2: Game never alerted yet
     if (!existing) {
       if (qualifyingDrop.drop >= SECONDARY_DROP_THRESHOLD) {
-        // Direct critical drop >= 0.99 on first discovery
+        // Direct critical drop >= 1.10 on first discovery
         alertedMatchMap.set(match.id, {
+          alertedPrimary: true,
+          alertedSecondary: true,
           alerted065: true,
           alerted099: true,
           firstAlertAt: Date.now(),
@@ -203,18 +209,20 @@ async function checkMatchTotal(match) {
           megaAlertAt: Date.now(),
           megaDrop: qualifyingDrop.drop,
         });
-        log(`🔥 [DIRECT CRITICAL DROP >= 0.99] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${SECONDARY_DROP_THRESHOLD}`);
-        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'DIRECT_099');
+        log(`🔥 [DIRECT CRITICAL DROP >= ${SECONDARY_DROP_THRESHOLD.toFixed(2)}] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${SECONDARY_DROP_THRESHOLD}`);
+        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'DIRECT_CRITICAL');
       } else if (qualifyingDrop.drop >= DROP_THRESHOLD) {
-        // Primary alert >= 0.65
+        // Primary alert >= 0.90
         alertedMatchMap.set(match.id, {
+          alertedPrimary: true,
+          alertedSecondary: false,
           alerted065: true,
           alerted099: false,
           firstAlertAt: Date.now(),
           firstDrop: qualifyingDrop.drop,
         });
-        log(`🚨 [PRIMARY ALERT >= 0.65] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${DROP_THRESHOLD}`);
-        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'PRIMARY_065');
+        log(`🚨 [PRIMARY ALERT >= ${DROP_THRESHOLD.toFixed(2)}] ${match.home} vs ${match.away} | Live Time: ${match.time} | Drop Min: ${qualifyingDrop.min}' | DROP: ${qualifyingDrop.drop} >= ${DROP_THRESHOLD}`);
+        await sendTelegramAlert(match, String(qualifyingDrop.min), qualifyingDrop.drop, qualifyingDrop.line, 'PRIMARY');
       }
     }
   } catch (err) {
@@ -265,7 +273,7 @@ async function pollOnce() {
       }
     }
 
-    // Check each match that has not reached the >= 0.99 final threshold
+    // Check each match that has not reached the >= 1.10 final threshold
     const matchesToCheck = currentMatches.filter(m => !isMatchFullyMuted(m.id));
     const BATCH_SIZE = 4;
     for (let i = 0; i < matchesToCheck.length; i += BATCH_SIZE) {
@@ -306,7 +314,7 @@ async function startTelegramCommandListener() {
               `⏱️ <b>Last sweep:</b> ${secSince}s ago\n` +
               `⚽ <b>Live matches tracked:</b> ${botStats.lastGamesFound}\n` +
               `🔄 <b>Sweeps executed:</b> ${botStats.sweepCount}\n` +
-              `📉 <b>Primary Threshold:</b> ≥ 0.65 | 🔥 <b>Secondary Surge:</b> ≥ 0.99\n` +
+              `📉 <b>Primary Threshold:</b> ≥ ${DROP_THRESHOLD.toFixed(2)} | 🔥 <b>Secondary Surge:</b> ≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)}\n` +
               `📡 <b>Railway:</b> Online & updating without interference.`,
               targetChat
             );
@@ -314,11 +322,11 @@ async function startTelegramCommandListener() {
             const uptimeMins = Math.floor((Date.now() - botStats.startedAt) / 60000);
             const secSince = botStats.lastSweepTime ? Math.round((Date.now() - botStats.lastSweepTime) / 1000) : 0;
             const activeMonitored = alertedMatchMap.size;
-            let count065Only = 0;
-            let count099 = 0;
+            let countPrimaryOnly = 0;
+            let countSecondary = 0;
             for (const [_, rec] of alertedMatchMap.entries()) {
-              if (rec.alerted099) count099++;
-              else count065Only++;
+              if (rec.alertedSecondary || rec.alerted099) countSecondary++;
+              else countPrimaryOnly++;
             }
 
             const statusReport = `🟢 <b>RAILWAY LIVE BOT STATUS: 100% HEALTHY</b>\n\n` +
@@ -329,7 +337,7 @@ async function startTelegramCommandListener() {
               `📉 <b>Primary Threshold:</b> DROP ≥ ${DROP_THRESHOLD.toFixed(2)} (Initial Alert)\n` +
               `🔥 <b>Secondary Threshold:</b> DROP ≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)} (Re-alerts if game escalates)\n` +
               `🔔 <b>Total Alerts Sent:</b> ${botStats.totalAlertsSent}\n` +
-              `🎯 <b>Tracked Matches:</b> ${activeMonitored} (${count065Only} watching for ≥0.99 surge, ${count099} fully muted)\n` +
+              `🎯 <b>Tracked Matches:</b> ${activeMonitored} (${countPrimaryOnly} watching for ≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)} surge, ${countSecondary} fully muted)\n` +
               `🛡️ <b>Interference Status:</b> ${botStats.consecutiveErrors > 0 ? '⚠️ Transient retries' : '✅ NONE (dropping-odds connection 100% clear)'}\n\n` +
               `🚀 <i>Status: Actively monitoring 24/7 without delays or interference.</i>`;
             await sendTelegramMessage(statusReport, targetChat);
@@ -338,7 +346,7 @@ async function startTelegramCommandListener() {
               `🧪 <b>Railway Bot Test Alert</b>\n\n` +
               `✅ Telegram alert delivery confirmed!\n` +
               `⏱️ <b>Timestamp:</b> ${new Date().toLocaleTimeString()} UTC\n` +
-              `📉 <b>Thresholds:</b> Primary ≥ 0.65 | Secondary Escalation ≥ 0.99\n` +
+              `📉 <b>Thresholds:</b> Primary ≥ ${DROP_THRESHOLD.toFixed(2)} | Secondary Escalation ≥ ${SECONDARY_DROP_THRESHOLD.toFixed(2)}\n` +
               `🎯 Your Railway instance is alive, connected, and receiving updates without interference.`,
               targetChat
             );
@@ -357,9 +365,9 @@ async function main() {
   log('🚀 DROPPING-ODDS 24/7 LIVE MONITORING DAEMON (BULLETPROOF)');
   log(`🎯 Monitored View: https://dropping-odds.com/index.php?view=live`);
   log(`📊 Section Checked: event.php?id=<id>&t=total (TOTAL Section Drop)`);
-  log(`⚡ Primary Threshold: DROP >= ${DROP_THRESHOLD}`);
-  log(`🔥 Secondary Threshold: DROP >= ${SECONDARY_DROP_THRESHOLD} (Re-alerts if game reaches >= 0.99)`);
-  log(`🔒 Deduplication: Max 2 alerts per game (0.65+ then 0.99+ escalation)`);
+  log(`⚡ Primary Threshold: DROP >= ${DROP_THRESHOLD.toFixed(2)}`);
+  log(`🔥 Secondary Threshold: DROP >= ${SECONDARY_DROP_THRESHOLD.toFixed(2)} (Re-alerts if game reaches >= ${SECONDARY_DROP_THRESHOLD.toFixed(2)})`);
+  log(`🔒 Deduplication: Max 2 alerts per game (${DROP_THRESHOLD.toFixed(2)}+ then ${SECONDARY_DROP_THRESHOLD.toFixed(2)}+ escalation)`);
   log(`📲 Target Chat ID: ${CHAT_ID}`);
   log('================================================================');
 

@@ -26,7 +26,7 @@ export default function App() {
   const [config, setConfig] = useState<BotConfig>({
     telegramToken: '8249195603:AAHwKdMhC8MUNN10rfoKpkNI5ka_33w3phs',
     telegramChatId: '2065059615',
-    dropThreshold: 0.65,
+    dropThreshold: 0.90,
     checkIntervalSeconds: 15,
     soundEnabled: true,
     autoScrollToAlert: true,
@@ -73,7 +73,7 @@ export default function App() {
     };
   }, []);
 
-  // Seed initial alerts matching the 0.65+ matches in INITIAL_MATCHES
+  // Seed initial alerts matching the 0.90+ and 1.10+ matches in INITIAL_MATCHES
   const [alerts, setAlerts] = useState<BotAlert[]>([
     {
       id: 'alert-1',
@@ -83,8 +83,8 @@ export default function App() {
       country: 'Costa Rica',
       score: '0:1',
       minute: 79,
-      dropValue: 0.72,
-      threshold: 0.65,
+      dropValue: 0.95,
+      threshold: 0.90,
       line: 'Over 2.5',
       odd: 1.42,
       timestamp: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
@@ -99,8 +99,8 @@ export default function App() {
       country: 'Turkey',
       score: '1:1',
       minute: 84,
-      dropValue: 0.68,
-      threshold: 0.65,
+      dropValue: 1.15,
+      threshold: 1.10,
       line: 'Over 2.5',
       odd: 1.45,
       timestamp: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
@@ -126,13 +126,13 @@ export default function App() {
       id: 'log-3',
       timestamp: new Date(Date.now() - 11 * 60 * 1000).toLocaleTimeString(),
       level: 'ALERT',
-      message: '🚨 High Drop Detected! Match #36108425 Karsiyaka SK (Min: 84\') DROP: 0.68 >= 0.65',
+      message: '🔥 Critical Drop Detected! Match #36108425 Karsiyaka SK (Min: 84\') DROP: 1.15 >= 1.10',
     },
     {
       id: 'log-4',
       timestamp: new Date(Date.now() - 4 * 60 * 1000).toLocaleTimeString(),
       level: 'ALERT',
-      message: '🚨 High Drop Detected! Match #36156592 Moravia (W) (Min: 79\') DROP: 0.72 >= 0.65',
+      message: '🚨 Primary High Drop Detected! Match #36156592 Moravia (W) (Min: 79\') DROP: 0.95 >= 0.90',
     },
     {
       id: 'log-5',
@@ -478,7 +478,7 @@ export default function App() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
             <span className="font-bold text-zinc-300">Quick Test Controls:</span>
-            <span className="text-zinc-500 hidden sm:inline">&mdash; Test DROP &ge; 0.65 alert, table parsing, and Telegram dispatcher:</span>
+            <span className="text-zinc-500 hidden sm:inline">&mdash; Test DROP &ge; 0.90 / &ge; 1.10 alerts, table parsing, and Telegram dispatcher:</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

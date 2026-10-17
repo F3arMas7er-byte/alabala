@@ -114,7 +114,7 @@ export const ConsoleLogs: React.FC<ConsoleLogsProps> = ({
               className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded-md text-[11px] text-zinc-300 focus:outline-none"
             >
               <option value="ALL">ALL LEVELS</option>
-              <option value="ALERT">ALERT (DROP ≥ 0.65)</option>
+              <option value="ALERT">ALERT (DROP ≥ 0.90)</option>
               <option value="INFO">INFO</option>
               <option value="WARNING">WARNING</option>
             </select>

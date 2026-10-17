@@ -286,7 +286,7 @@ export const TotalSectionDropGraph: React.FC<TotalSectionDropGraphProps> = ({
                 <span>Minute: <strong>{hoveredMinute.minute}&apos;</strong></span>
                 <span>Drop Value: <strong className={hoveredMinute.drop >= threshold ? 'text-rose-400' : 'text-emerald-400'}>{hoveredMinute.drop.toFixed(2)}</strong></span>
                 <span>Current Odd: <strong>{hoveredMinute.odd.toFixed(2)}</strong></span>
-                <span>Status: {hoveredMinute.drop >= threshold ? '🚨 EXCEEDS 0.65' : '✅ Below Threshold'}</span>
+                <span>Status: {hoveredMinute.drop >= threshold ? `🚨 EXCEEDS ${threshold.toFixed(2)}` : '✅ Below Threshold'}</span>
               </div>
             )}
           </div>

@@ -64,16 +64,16 @@ export const TestSuiteModal: React.FC<TestSuiteModalProps> = ({
     },
     {
       id: 't4',
-      name: 'DROP ≥ 0.65 Boundary Condition Trigger',
+      name: 'DROP ≥ 0.90 Boundary Condition Trigger',
       category: 'Alert Logic',
-      expected: 'Values 0.64 ignore; Values 0.65 and 0.72 fire instant notification',
+      expected: 'Values 0.89 ignore; Values 0.90 and 1.05 fire instant notification',
       status: 'PENDING',
     },
     {
       id: 't5',
-      name: 'Dual-Stage Trigger (≥ 0.65 Primary & ≥ 0.99 Secondary Surge)',
+      name: 'Dual-Stage Trigger (≥ 0.90 Primary & ≥ 1.10 Secondary Surge)',
       category: 'Deduplication & Escalation',
-      expected: 'Sends primary alert when DROP >= 0.65; mutes intermediate drops; fires additional alert IF drop reaches >= 0.99',
+      expected: 'Sends primary alert when DROP >= 0.90; mutes intermediate drops; fires additional alert IF drop reaches >= 1.10',
       status: 'PENDING',
     },
     {
@@ -118,8 +118,8 @@ export const TestSuiteModal: React.FC<TestSuiteModalProps> = ({
       if (i === 0) detail = 'Parsed 6/6 required columns correctly with 100% regex match';
       if (i === 1) detail = 'Targeted parameter t=total confirmed active sub-tab';
       if (i === 2) detail = 'Extracted 7 minute columns (15\', 30\', 45\', 60\', 70\', 75\', 79\')';
-      if (i === 3) detail = '0.64 ignored; 0.65 triggered (diff: +0.00); 0.72 triggered (diff: +0.07)';
-      if (i === 4) detail = 'Passed: Match alerted at 75\' (0.66), 76\' (0.82) muted, 78\' (1.05 >= 0.99) fired secondary alert, 79\' (1.10) muted';
+      if (i === 3) detail = '0.89 ignored; 0.90 triggered (diff: +0.00); 1.05 triggered (diff: +0.15)';
+      if (i === 4) detail = 'Passed: Match alerted at 75\' (0.92), 76\' (1.02) muted, 78\' (1.14 >= 1.10) fired secondary alert, 79\' (1.18) muted';
       if (i === 5) detail = 'Formatted with <b>, <code>, and <a> anchors';
       if (i === 6) detail = 'Passed: 100% of matches in live section monitored with zero exclusions';
       if (i === 7) detail = 'JSZip packaged 13 files into dropping_odds_bot.zip';
@@ -158,7 +158,7 @@ export const TestSuiteModal: React.FC<TestSuiteModalProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-zinc-400">
-                Verifies the scraper, horizontal TOTAL DROP graph parsing, ≥ 0.65 threshold, and Telegram dispatcher.
+                Verifies the scraper, horizontal TOTAL DROP graph parsing, ≥ 0.90 / ≥ 1.10 thresholds, and Telegram dispatcher.
               </p>
             </div>
           </div>
